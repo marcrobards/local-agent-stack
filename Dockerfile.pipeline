@@ -1,0 +1,19 @@
+FROM ghcr.io/open-webui/pipelines:main
+
+# Install our dependencies.
+# The Pipelines base image is Python 3.11.
+RUN pip install --no-cache-dir \
+    mem0ai \
+    qdrant-client \
+    python-dotenv \
+    ollama \
+    requests \
+    beautifulsoup4
+
+# Copy the whole repo into the image.
+# .dockerignore (below) keeps it trim.
+COPY . /app/local-agent-stack
+
+# Put the pipeline file where the Pipelines server auto-loads from.
+RUN cp /app/local-agent-stack/src/pipelines/shopping_agent_pipeline.py \
+       /app/pipelines/shopping_agent_pipeline.py

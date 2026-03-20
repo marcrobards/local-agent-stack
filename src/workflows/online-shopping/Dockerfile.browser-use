@@ -1,0 +1,10 @@
+FROM browseruse/browseruse:latest
+
+ENV IN_DOCKER=True
+ENV PYTHONUNBUFFERED=1
+
+USER root
+RUN pip install --no-cache-dir --target=/app/.venv/lib/python3.12/site-packages langchain-ollama
+USER browseruse
+
+WORKDIR /app

@@ -1,0 +1,5 @@
+FROM docker.io/browseruse/browseruse:latest
+
+# anthropic client is already bundled with browser-use — no extra installs needed
+
+WORKDIR /app

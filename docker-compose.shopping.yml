@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Add this service to your existing docker-compose.yml
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The shopping-pipeline container:
+#   - Runs the Open WebUI Pipelines server on port 9099
+#   - Has access to Ollama and Qdrant via the Docker Compose network
+#   - Contains the full local-agent-stack repo baked in at build time
+#   - Has mem0ai, qdrant-client, ollama, requests, bs4 pre-installed
+#
+# After adding this, run:
+#   docker compose build shopping-pipeline
+#   docker compose up -d shopping-pipeline
+#
+# Then in Open WebUI:
+#   Admin Panel → Settings → Connections → + (add connection)
+#   URL:     http://shopping-pipeline:9099
+#   API Key: 0p3n-w3bu!
+#   Save — "Shopping Agent" will appear in the model dropdown.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  shopping-pipeline:
+    build:
+      context: .          # repo root — Dockerfile is at ./Dockerfile.pipeline
+      dockerfile: Dockerfile.pipeline
+    container_name: shopping-pipeline
+    restart: unless-stopped
+    environment:
+      - PIPELINES_API_KEY=0p3n-w3bu!
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_LLM_MODEL=qwen2.5:7b
+      - OLLAMA_VISION_MODEL=qwen2.5vl:7b
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=agent_memory
+      - OLLAMA_EMBED_MODEL=nomic-embed-text:latest
+      - OLLAMA_EMBED_DIMS=768
+      - DANIELLE_USER_ID=danielle
+    depends_on:
+      - ollama
+      - qdrant
+    # No ports exposed to host — Open WebUI reaches it via the internal network.
+    # If you ever need to test from the host, uncomment the line below:
+    # ports:
+    #   - "9099:9099"

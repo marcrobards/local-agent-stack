@@ -1,0 +1,2 @@
+#!/bin/bash
+git push && ssh marc@lenovo-laptop 'cd ~/local-agent-stack && git pull'
