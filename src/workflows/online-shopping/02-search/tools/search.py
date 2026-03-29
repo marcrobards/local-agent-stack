@@ -173,6 +173,7 @@ async def search_source(query: str, source: str) -> SearchResult:
             browser=browser,
             max_actions_per_step=3,
             tool_call_in_content=False,
+            skills=['75d9f278-01ba-48e6-be98-ac4783985527'],
         )
         run_result = await agent.run(max_steps=MAX_STEPS)
         raw = run_result.final_result()

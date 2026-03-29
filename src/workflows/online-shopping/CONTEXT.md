@@ -30,7 +30,6 @@ in standard searches.
 
 ## Models
 
-- Text stages (01, 02, 02-verify, 03): qwen2.5:7b via Ollama
 - Color verification (02a): qwen2.5vl:7b via Ollama
 
 ## Sources searched (stage 02)
