@@ -8,6 +8,7 @@ description: Helps Danielle find specific products online. Clarifies the
 requirements: ollama, mem0ai, qdrant-client, python-dotenv, requests, beautifulsoup4
 """
 
+import asyncio
 import sys
 import os
 import re
@@ -109,7 +110,7 @@ def _stage_search(spec: str) -> str:
 
     user_content = spec
     if tool_results:
-        user_content += f"\n\n--- Live search results (Etsy, Target, Walmart) ---\n{tool_results}"
+        user_content += f"\n\n--- Live search results ---\n{tool_results}"
 
     return _ollama_chat(TEXT_MODEL, [
         {"role": "system",  "content": system},
@@ -119,21 +120,11 @@ def _stage_search(spec: str) -> str:
 
 def _run_search_tools(spec: str) -> str:
     try:
-        from search import search
+        from search import search_all, format_results
         query = spec.split("\n")[0][:120]
-        rows = []
-        for source in ["etsy", "target", "walmart"]:
-            try:
-                for r in search(query, source, max_results=5):
-                    rows.append(
-                        f"Source: {source.title()}\n"
-                        f"URL: {r.get('url','')}\n"
-                        f"Title: {r.get('title','')}\n"
-                        f"Price: {r.get('price','unknown')}\n"
-                    )
-            except Exception:
-                pass
-        return "\n".join(rows)
+        sources = ["amazon", "google_shopping", "etsy", "target", "walmart"]
+        results = asyncio.run(search_all(query, sources=sources))
+        return format_results(results)
     except Exception:
         return ""
 

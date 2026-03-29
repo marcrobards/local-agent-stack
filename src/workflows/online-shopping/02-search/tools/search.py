@@ -290,15 +290,17 @@ async def search_all(
         if is_clothing:
             sources.append("poshmark")
 
-    results = []
-    for source in sources:
-        print(f"  🔍 Searching {SOURCE_CONFIG[source]['label']}...", flush=True)
-        result = await search_source(query, source)
-        results.append(result)
-        status = f"✅ {len(result.candidates)} candidates" if not result.error else f"❌ {result.error}"
-        print(f"     {status} ({result.elapsed:.1f}s)", flush=True)
+    labels = [SOURCE_CONFIG[s]["label"] for s in sources]
+    print(f"  🔍 Searching {', '.join(labels)} concurrently...", flush=True)
 
-    return results
+    results = await asyncio.gather(*(search_source(query, s) for s in sources))
+
+    for result in results:
+        label = SOURCE_CONFIG[result.source]["label"]
+        status = f"✅ {len(result.candidates)} candidates" if not result.error else f"❌ {result.error}"
+        print(f"     {label}: {status} ({result.elapsed:.1f}s)", flush=True)
+
+    return list(results)
 
 
 def format_results(results: list[SearchResult]) -> str:
