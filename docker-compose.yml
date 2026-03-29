@@ -103,6 +103,7 @@ services:
       - USER_ID=test_user
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER}
     depends_on:
       - ollama
       - qdrant
