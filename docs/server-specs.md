@@ -24,7 +24,12 @@
 | OS | Ubuntu |
 | LLM Runtime | Ollama |
 | LLM Model | qwen2.5:7b |
+| Vision Model | qwen2.5vl:7b |
 | Embedding Model | nomic-embed-text |
 | Vector DB | Qdrant (Docker) |
 | Memory Library | mem0 |
-| Language | Python 3.12 |
+| Chat UI | Open WebUI |
+| Pipeline Server | Open WebUI Pipelines |
+| Monitoring | Beszel |
+| Containers | Docker Compose |
+| Language | Python 3.11 (Pipelines container) |

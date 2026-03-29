@@ -18,10 +18,13 @@ cd local-agent-stack
 
 ```bash
 ollama pull qwen2.5:7b
+ollama pull qwen2.5vl:7b
 ollama pull nomic-embed-text:latest
 ```
 
-Both are required. `qwen2.5:7b` handles LLM inference and memory extraction. `nomic-embed-text` handles embeddings.
+- `qwen2.5:7b` — LLM inference and memory extraction
+- `qwen2.5vl:7b` — vision model used for color verification in the shopping pipeline
+- `nomic-embed-text` — embeddings
 
 ## 3. Configure environment
 
@@ -29,34 +32,78 @@ Both are required. `qwen2.5:7b` handles LLM inference and memory extraction. `no
 cp .env.example .env
 ```
 
-The defaults in `.env.example` work out of the box for a local setup. Edit only if your Ollama port or Qdrant port differ from the defaults.
+Edit `.env` and fill in the required values:
 
-## 4. Start Qdrant
+| Variable | Purpose |
+|---|---|
+| `OLLAMA_VISION_MODEL` | Vision model for color verification (default: `qwen2.5vl:7b`) |
+| `SHOPPING_WORKFLOW_DIR` | Path to shopping workflow files (default: `workflows/online-shopping`) |
+| `DANIELLE_USER_ID` | User ID for the shopping agent's memory scope |
+| `ANTHROPIC_API_KEY` | **Required** for the shopping agent's browser-use search stage |
+| `BROWSER_USE_API_KEY` | **Required** for the shopping agent's browser-use search stage |
+| `BESZEL_TOKEN` | Token for Beszel monitoring agent (see Beszel first-time setup in `docker-compose.yml`) |
+| `BESZEL_KEY` | Key for Beszel monitoring agent |
+
+## 4. Start services
 
 ```bash
 docker compose up -d
 ```
 
-Verify it's running:
+This starts all core services:
+
+- **Ollama** — LLM inference (port 11434)
+- **Open WebUI** — chat interface (port 3000)
+- **Qdrant** — vector storage (ports 6333/6334)
+- **Beszel** — server/container monitoring (port 8090)
+- **shopping-pipeline** — Open WebUI Pipelines server for the shopping agent (internal network only)
+
+Verify services are running:
 
 ```bash
-curl http://localhost:6333/healthz
-# expected: {"title":"qdrant - vector search engine"}
+curl http://localhost:11434/api/tags    # Ollama
+curl http://localhost:6333/healthz     # Qdrant
 ```
 
 The Qdrant dashboard is available at http://localhost:6333/dashboard.
 
-## 5. Set up Python environment
+## 5. Set up Python environment (optional)
+
+The shopping pipeline runs inside Docker — no local Python setup is needed for it.
+
+For local memory layer development and testing:
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r src/agent-memory-layer/requirements.txt
 ```
 
-## 6. Run the smoke test
+## 6. Connect the shopping pipeline in Open WebUI
+
+Build the shopping pipeline image:
 
 ```bash
+docker compose build shopping-pipeline
+```
+
+Then connect it in Open WebUI:
+
+1. Open http://localhost:3000
+2. Go to **Admin Panel → Settings → Connections**
+3. Click **+** to add a connection
+4. URL: `http://shopping-pipeline:9099`
+5. API Key: `0p3n-w3bu!`
+6. Save — "Shopping Agent" will appear in the model dropdown
+
+## Smoke tests
+
+### Memory layer
+
+Run from the `src/agent-memory-layer/` directory:
+
+```bash
+cd src/agent-memory-layer
 python -m tests.smoke_test
 ```
 
@@ -83,6 +130,22 @@ Expected output:
 ```
 
 Note: writes are slow (5–15 seconds each) because mem0 calls the LLM to extract facts on every `mem.add()`. This is expected.
+
+### Color verify stage
+
+```bash
+docker compose --profile tools run --rm smoke-test-stage02a
+```
+
+Tests the vision model's color verification capability.
+
+### Browser-use search
+
+```bash
+docker compose --profile tools run --rm smoke-test-browser-use
+```
+
+Requires `ANTHROPIC_API_KEY` and `BROWSER_USE_API_KEY` to be set in `.env`.
 
 ## Troubleshooting
 
