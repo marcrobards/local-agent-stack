@@ -104,6 +104,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
       - LLM_PROVIDER=${LLM_PROVIDER}
+      - SEARCH_LLM=${SEARCH_LLM}
     depends_on:
       - ollama
       - qdrant
