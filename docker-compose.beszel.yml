@@ -10,7 +10,7 @@
 # Or add these services to your main docker-compose.yml.
 #
 # Dashboard: http://localhost:8090
-# Also accessible from Danielle's iPad at http://<server-ip>:8090
+# Also accessible from an iPad at http://<server-ip>:8090
 
 services:
   beszel:

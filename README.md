@@ -31,7 +31,7 @@ A modular stack for running and orchestrating AI agents at home. Built increment
 
 A 5-stage pipeline that helps find specific products online, with color-accuracy verification via a vision model:
 
-1. **Clarify request** — conversational clarification using Danielle's stored preferences from memory
+1. **Clarify request** — conversational clarification using the user's stored preferences from memory
 2. **Search** — concurrent searches across Amazon, Google Shopping, Etsy, Target, Walmart (+ Poshmark for clothing) via Browser Use Cloud
 3. **Verify** — confirms each candidate URL is live and assesses spec match
 4. **Color verify** — vision model (qwen2.5vl:7b) checks product images against the color description

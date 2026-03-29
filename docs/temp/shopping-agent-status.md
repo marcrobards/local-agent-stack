@@ -1,6 +1,6 @@
 # Shopping Agent — Current State
 
-**What it is:** A 5-stage pipeline that helps a user ("Danielle") find products online, with a focus on color-accuracy verification. It runs inside Open WebUI via the Pipelines server.
+**What it is:** A 5-stage pipeline that helps the user find products online, with a focus on color-accuracy verification. It runs inside Open WebUI via the Pipelines server.
 
 **Status: ✅ Running** — pipeline starts and loads in Open WebUI.
 
@@ -8,7 +8,7 @@
 
 | Stage | Status | Implementation |
 |---|---|---|
-| **01-clarify-request** | ✅ Complete | PROMPT.md (94 lines) + Ollama `qwen2.5:7b`. Reads Danielle's mem0 preferences. Smoke test passes. |
+| **01-clarify-request** | ✅ Complete | PROMPT.md (94 lines) + Ollama `qwen2.5:7b`. Reads the user's mem0 preferences. Smoke test passes. |
 | **02-search** | ✅ Complete | `search.py` — full Browser Use Cloud agent. Searches Amazon, Google Shopping, Etsy, Target, Walmart (+ Poshmark for clothing) **concurrently** via `asyncio.gather()`. Uses **Anthropic Claude Sonnet** (cloud) or Browser Use's own LLM. Structured `Candidate` dataclass, JSON parsing with code-fence stripping. |
 | **02-verify** | ✅ Complete | `fetch_page.py` — requests+BeautifulSoup page fetcher. Checks for 404s, homepage redirects, out-of-stock signals. Returns LIVE/DEAD status. |
 | **02a-color-verify** | ✅ Complete | `fetch_images.py` — extracts hero/product images (OG meta, CSS selectors, fallback). Vision model `qwen2.5vl:7b` assesses color PASS/FAIL/AMBIGUOUS. Smoke test generates a synthetic PNG. |

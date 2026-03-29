@@ -45,7 +45,7 @@ level:
 
 Pass all three confidence levels to the color verify stage. Do not drop
 LOW confidence candidates — they may still pass color verification and
-be worth showing Danielle. Flag them clearly so the present stage can
+be worth showing the user. Flag them clearly so the present stage can
 treat them accordingly.
 
 **What to record for each verified candidate:**

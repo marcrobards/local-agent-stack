@@ -2,7 +2,7 @@
 title: Shopping Agent
 author: local-agent-stack
 version: 0.1.0
-description: Helps Danielle find specific products online. Clarifies the
+description: Helps the user find specific products online. Clarifies the
   request, searches multiple sources, verifies links, checks colors with a
   vision model, and presents tappable results.
 requirements: ollama, mem0ai, qdrant-client, python-dotenv, requests, beautifulsoup4
@@ -55,7 +55,7 @@ def _ollama_chat(model: str, messages: list) -> str:
 
 
 def _recall_danielle(query: str) -> str:
-    """Pull relevant memories for Danielle. Fails silently if mem0 is down."""
+    """Pull relevant memories for the user. Fails silently if mem0 is down."""
     try:
         from memory import mem
         hits = mem.search(query, user_id=DANIELLE_USER_ID, limit=5)
@@ -63,7 +63,7 @@ def _recall_danielle(query: str) -> str:
         if not results:
             return ""
         lines = "\n".join(f"- {r['memory']}" for r in results)
-        return f"Known preferences for Danielle:\n{lines}"
+        return f"Known preferences for the user:\n{lines}"
     except Exception:
         return ""
 
@@ -282,7 +282,7 @@ class Pipeline:
         )
         DANIELLE_USER_ID: str = Field(
             default="danielle",
-            description="mem0 user_id for Danielle's memory scope"
+            description="mem0 user_id for the user's memory scope"
         )
 
     def __init__(self):
@@ -307,7 +307,7 @@ class Pipeline:
           - user_message: the latest user message text
           - messages: full conversation history
           - body: raw request body
-        Status updates stream as plain text lines prefixed with '…' so Danielle
+        Status updates stream as plain text lines prefixed with '…' so the user
         can see progress while the pipeline runs.
         """
 

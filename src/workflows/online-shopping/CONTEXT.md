@@ -1,13 +1,13 @@
 # Online Shopping Workflow
 
-This workflow helps Danielle find specific products online. It is optimized
+This workflow helps the user find specific products online. It is optimized
 for searches where color accuracy is critical — the most common failure mode
 in standard searches.
 
 ## Stages
 
 1. **01-clarify-request** — Conversational clarification. Gathers a complete
-   product spec from Danielle, asking targeted questions. Uses Danielle's
+   product spec from the user, asking targeted questions. Uses the user's
    stored preferences from memory. Ends with a confirmed spec.
 
 2. **02-search** — Executes searches across five sources using the confirmed
@@ -19,12 +19,12 @@ in standard searches.
 4. **02a-color-verify** — Vision model (qwen2.5vl:7b) checks product images
    against the color description. Passes, fails, or marks ambiguous.
 
-5. **03-present** — Formats color-verified results for Danielle in Open WebUI.
+5. **03-present** — Formats color-verified results for the user in Open WebUI.
    Tappable links, friendly language, best matches first.
 
 ## Memory scoping
 
-- Read at stage 01: `user_id="danielle"` — her preferences, past searches
+- Read at stage 01: `user_id="danielle"` — their preferences, past searches
 - Written after stage 03: `user_id="danielle"` — successful session stored
 - Session-scoped ephemeral data: `user_id="session_<timestamp>"`
 
