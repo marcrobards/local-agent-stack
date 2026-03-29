@@ -233,7 +233,8 @@ Important: Do not navigate to individual product pages. Extract only what is vis
 def _parse_results(raw: Optional[str], source: str, label: str) -> list[Candidate]:
     """
     Parse the agent's raw string output into a list of Candidate objects.
-    Handles JSON wrapped in markdown code fences.
+    Handles JSON wrapped in markdown code fences, triple-quoted strings,
+    and escaped JSON.
     """
     if not raw:
         return []
@@ -241,14 +242,24 @@ def _parse_results(raw: Optional[str], source: str, label: str) -> list[Candidat
     # Strip markdown code fences if present
     cleaned = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
 
+    # Strip leading/trailing triple quotes (agent sometimes wraps output)
+    cleaned = re.sub(r'^"{3}', "", cleaned)
+    cleaned = re.sub(r'"{3}$', "", cleaned).strip()
+
+    # Unescape escaped JSON (e.g. \" → ")
+    if r'\"' in cleaned:
+        cleaned = cleaned.replace(r'\"', '"')
+
     # Find the JSON array (agent sometimes adds preamble text)
     match = re.search(r"\[.*\]", cleaned, re.DOTALL)
     if not match:
+        print(f"  ⚠️ {label}: no JSON array found in final_result ({len(raw)} chars)", flush=True)
         return []
 
     try:
         items = json.loads(match.group())
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        print(f"  ⚠️ {label}: JSON parse error: {exc} (input: {match.group()[:200]}...)", flush=True)
         return []
 
     candidates = []
