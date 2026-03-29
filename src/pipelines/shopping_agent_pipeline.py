@@ -54,6 +54,7 @@ USER_ID = os.getenv("USER_ID",    "user_1")
 LLM_PROVIDER     = os.getenv("LLM_PROVIDER", "ollama")           # "ollama" or "claude"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+STAGE_OUTPUT_DIR  = Path(os.getenv("STAGE_OUTPUT_DIR", "/app/local-agent-stack/output"))
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +63,19 @@ CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 
 def _load_prompt(stage: str) -> str:
     return (WORKFLOW_DIR / stage / "PROMPT.md").read_text()
+
+
+def _new_session_dir() -> Path:
+    from datetime import datetime
+    session_dir = STAGE_OUTPUT_DIR / datetime.now().strftime("%Y%m%d-%H%M%S")
+    session_dir.mkdir(parents=True, exist_ok=True)
+    return session_dir
+
+
+def _save_stage(session_dir: Path, filename: str, content: str) -> None:
+    path = session_dir / filename
+    path.write_text(content, encoding="utf-8")
+    log.info("stage_output  saved %s (%d bytes)", path, len(content))
 
 
 def _ollama_chat(model: str, messages: list) -> str:
@@ -449,18 +463,24 @@ class Pipeline:
 
             # --- Full pipeline ---
             log.info("══════════════ PIPELINE START ══════════════")
+            session_dir = _new_session_dir()
+            _save_stage(session_dir, "00-spec.md", spec)
             yield "✓ Got it, searching now…\n\n"
 
             candidates = _stage_search(spec)
+            _save_stage(session_dir, "01-search.md", candidates)
             yield "🔍 Links found, verifying…\n\n"
 
             verified = _stage_verify(spec, candidates)
+            _save_stage(session_dir, "02-verify.md", verified)
             yield "✅ Links verified, checking colors…\n\n"
 
             color_verified = _stage_color_verify(spec, verified)
+            _save_stage(session_dir, "03-color-verify.md", color_verified)
             yield "🎨 Colors checked, putting results together…\n\n"
 
             result = _stage_present(spec, color_verified)
+            _save_stage(session_dir, "04-present.md", result)
 
             # Store session in memory after success
             original_request = next(
@@ -469,6 +489,7 @@ class Pipeline:
             )
             _store_session(original_request, spec)
             log.info("══════════════ PIPELINE COMPLETE ══════════════")
+            log.info("stage_output  session_dir=%s", session_dir)
 
             yield result
 

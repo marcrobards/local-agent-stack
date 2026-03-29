@@ -105,6 +105,8 @@ services:
       - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
       - LLM_PROVIDER=${LLM_PROVIDER}
       - SEARCH_LLM=${SEARCH_LLM}
+    volumes:
+      - ./output:/app/local-agent-stack/output
     depends_on:
       - ollama
       - qdrant
