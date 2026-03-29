@@ -521,31 +521,31 @@ class Pipeline:
 
     class Valves(BaseModel):
         LLM_PROVIDER: str = Field(
-            default="claude",
+            default=os.getenv("LLM_PROVIDER", "claude"),
             description="LLM provider for text stages: 'ollama' (local) or 'claude' (Anthropic API)"
         )
         ANTHROPIC_API_KEY: str = Field(
-            default="",
+            default=os.getenv("ANTHROPIC_API_KEY", ""),
             description="Anthropic API key (required when LLM_PROVIDER is 'claude')"
         )
         CLAUDE_MODEL: str = Field(
-            default="claude-sonnet-4-20250514",
+            default=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514"),
             description="Claude model name (used when LLM_PROVIDER is 'claude')"
         )
         OLLAMA_BASE_URL: str = Field(
-            default="http://ollama:11434",
+            default=os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
             description="Ollama base URL (used for local text model and always for vision)"
         )
         TEXT_MODEL: str = Field(
-            default="qwen2.5:7b",
+            default=os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b"),
             description="Ollama model for text stages (used when LLM_PROVIDER is 'ollama')"
         )
         VISION_MODEL: str = Field(
-            default="qwen2.5vl:7b",
+            default=os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b"),
             description="Ollama model for color verification — always runs locally"
         )
         USER_ID: str = Field(
-            default="test_user",
+            default=os.getenv("USER_ID", "test_user"),
             description="mem0 user_id for the user's memory scope"
         )
 
