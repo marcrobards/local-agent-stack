@@ -67,6 +67,7 @@ services:
     environment:
       LISTEN: /beszel_socket/beszel.sock
       TOKEN: ${BESZEL_TOKEN}
+      KEY: ${BESZEL_TOKEN}
       HUB_URL: http://localhost:8090
     depends_on:
       - beszel
