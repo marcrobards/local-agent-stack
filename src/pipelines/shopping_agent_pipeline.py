@@ -288,7 +288,7 @@ class Pipeline:
     def __init__(self):
         self.type   = "manifold"  # was "pipe"
         self.id     = "shopping_agent"
-        self.name   = "Shopping Agent / "  # note the trailing space+slash — manifold prepends this to each pipe name
+        self.name   = "Shopping Agent"
         self.valves = self.Valves()
 
     def pipelines(self) -> list[dict]:
