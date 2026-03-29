@@ -5,7 +5,7 @@ version: 0.1.0
 description: Helps the user find specific products online. Clarifies the
   request, searches multiple sources, verifies links, checks colors with a
   vision model, and presents tappable results.
-requirements: ollama, mem0ai, qdrant-client, python-dotenv, requests, beautifulsoup4
+requirements: ollama, mem0ai, qdrant-client, python-dotenv, requests, beautifulsoup4, anthropic
 """
 
 import asyncio
@@ -42,6 +42,7 @@ for p in [str(MEMORY_MODULE), str(WORKFLOW_DIR / "02-search" / "tools"),
         sys.path.insert(0, p)
 
 from ollama import Client as OllamaClient
+import anthropic
 
 # ---------------------------------------------------------------------------
 # Runtime config — read from environment, with sane defaults for Docker
@@ -50,6 +51,9 @@ OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL",  "http://ollama:11434")
 TEXT_MODEL       = os.getenv("OLLAMA_LLM_MODEL",    "qwen2.5:7b")
 VISION_MODEL     = os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b")
 USER_ID = os.getenv("USER_ID",    "user_1")
+LLM_PROVIDER     = os.getenv("LLM_PROVIDER", "ollama")           # "ollama" or "claude"
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +71,38 @@ def _ollama_chat(model: str, messages: list) -> str:
     content = response["message"]["content"]
     log.info("ollama_chat  response_len=%d  preview=%.200s", len(content), content)
     return content
+
+
+def _claude_chat(messages: list) -> str:
+    """Send a chat request to the Anthropic API (Claude)."""
+    log.info("claude_chat  model=%s  messages=%d", CLAUDE_MODEL, len(messages))
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    # Separate system prompt from conversation messages
+    system_parts = []
+    chat_msgs = []
+    for msg in messages:
+        if msg["role"] == "system":
+            system_parts.append(msg["content"])
+        else:
+            chat_msgs.append({"role": msg["role"], "content": msg["content"]})
+
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=4096,
+        system="\n\n".join(system_parts) if system_parts else anthropic.NOT_GIVEN,
+        messages=chat_msgs,
+    )
+    content = response.content[0].text
+    log.info("claude_chat  response_len=%d  preview=%.200s", len(content), content)
+    return content
+
+
+def _text_chat(messages: list) -> str:
+    """Route text LLM calls to either Ollama or Claude based on LLM_PROVIDER."""
+    if LLM_PROVIDER == "claude":
+        return _claude_chat(messages)
+    return _ollama_chat(TEXT_MODEL, messages)
 
 
 def _recall_user(query: str) -> str:
@@ -122,7 +158,7 @@ def _stage_clarify(conversation: list) -> str:
         messages.append({"role": "system", "content": memory_context})
     messages.extend(conversation)
 
-    result = _ollama_chat(TEXT_MODEL, messages)
+    result = _text_chat(messages)
     log.info("clarify  OUTPUT  len=%d  preview=%.300s", len(result), result)
     return result
 
@@ -138,7 +174,7 @@ def _stage_search(spec: str) -> str:
     if tool_results:
         user_content += f"\n\n--- Live search results ---\n{tool_results}"
 
-    result = _ollama_chat(TEXT_MODEL, [
+    result = _text_chat([
         {"role": "system",  "content": system},
         {"role": "user",    "content": user_content},
     ])
@@ -179,7 +215,7 @@ def _stage_verify(spec: str, candidates: str) -> str:
     if page_data:
         user_content += f"\n\n--- Fetched page data ---\n{page_data}"
 
-    result = _ollama_chat(TEXT_MODEL, [
+    result = _text_chat([
         {"role": "system", "content": system},
         {"role": "user",   "content": user_content},
     ])
@@ -225,7 +261,7 @@ def _stage_color_verify(spec: str, verified: str) -> str:
     if vision_results:
         user_content += f"\n\n--- Vision color assessments ---\n{vision_results}"
 
-    result = _ollama_chat(TEXT_MODEL, [
+    result = _text_chat([
         {"role": "system", "content": system},
         {"role": "user",   "content": user_content},
     ])
@@ -281,7 +317,7 @@ def _run_color_verify_tools(spec: str, candidates: str) -> str:
 def _stage_present(spec: str, color_verified: str) -> str:
     log.info("━━━ STAGE: present ━━━")
     log.info("present  INPUT  spec_len=%d  color_verified_len=%d", len(spec), len(color_verified))
-    result = _ollama_chat(TEXT_MODEL, [
+    result = _text_chat([
         {"role": "system", "content": _load_prompt("03-present")},
         {"role": "user",   "content": (
             f"Confirmed product spec:\n{spec}\n\n"
@@ -334,17 +370,29 @@ def _is_spec_confirmed(messages: list) -> tuple[bool, str]:
 class Pipeline:
 
     class Valves(BaseModel):
+        LLM_PROVIDER: str = Field(
+            default="ollama",
+            description="LLM provider for text stages: 'ollama' (local) or 'claude' (Anthropic API)"
+        )
+        ANTHROPIC_API_KEY: str = Field(
+            default="",
+            description="Anthropic API key (required when LLM_PROVIDER is 'claude')"
+        )
+        CLAUDE_MODEL: str = Field(
+            default="claude-sonnet-4-20250514",
+            description="Claude model name (used when LLM_PROVIDER is 'claude')"
+        )
         OLLAMA_BASE_URL: str = Field(
             default="http://ollama:11434",
-            description="Ollama base URL (use Docker service name inside Compose network)"
+            description="Ollama base URL (used for local text model and always for vision)"
         )
         TEXT_MODEL: str = Field(
             default="qwen2.5:7b",
-            description="Model for text stages"
+            description="Ollama model for text stages (used when LLM_PROVIDER is 'ollama')"
         )
         VISION_MODEL: str = Field(
             default="qwen2.5vl:7b",
-            description="Model for color verification (stage 02a)"
+            description="Ollama model for color verification — always runs locally"
         )
         USER_ID: str = Field(
             default="test_user",
@@ -379,10 +427,14 @@ class Pipeline:
 
         # Apply valve overrides to module-level config
         global OLLAMA_BASE_URL, TEXT_MODEL, VISION_MODEL, USER_ID
+        global LLM_PROVIDER, ANTHROPIC_API_KEY, CLAUDE_MODEL
         OLLAMA_BASE_URL  = self.valves.OLLAMA_BASE_URL
         TEXT_MODEL       = self.valves.TEXT_MODEL
         VISION_MODEL     = self.valves.VISION_MODEL
-        USER_ID = self.valves.USER_ID
+        USER_ID          = self.valves.USER_ID
+        LLM_PROVIDER     = self.valves.LLM_PROVIDER
+        ANTHROPIC_API_KEY = self.valves.ANTHROPIC_API_KEY
+        CLAUDE_MODEL     = self.valves.CLAUDE_MODEL
 
         def run() -> Generator:
 
