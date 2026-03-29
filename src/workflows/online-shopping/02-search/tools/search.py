@@ -178,6 +178,7 @@ async def search_source(query: str, source: str) -> SearchResult:
         )
         run_result = await agent.run(max_steps=MAX_STEPS)
         raw = run_result.final_result()
+        print(f"  📋 {label} final_result: {('None' if raw is None else f'{len(raw)} chars: {raw[:300]}...' if len(raw or '') > 300 else raw)}", flush=True)
         result.candidates = _parse_results(raw, source, label)
     except Exception as exc:
         result.error = str(exc)
@@ -219,11 +220,13 @@ For each listing extract:
 - Any visible specs (size, color, dimensions, material — whatever is shown on the results page)
 - One short phrase noting what it appears to be
 
-Return ONLY a JSON array. No prose before or after. Each item must have these keys:
+When you have collected the listings, call the done action immediately with ONLY a JSON array as the text. Do not add any prose. Each item must have these keys:
   title, price, url, image_url, specs, match_reason{', shop_name' if source in ('etsy', 'poshmark') else ''}
 
 If fewer than {max_results} results exist, return however many there are.
-If the page fails to load or returns no results, return an empty array: []
+If the page fails to load or returns no results, call done with an empty array: []
+
+Important: Do not navigate to individual product pages. Extract only what is visible on the search results page, then call done right away.
 """
 
 
