@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir \
     ollama \
     requests \
     beautifulsoup4 \
-    browser-use \
+    "browser-use>=0.12,<1" \
     langchain-anthropic
 
 # Copy the whole repo into the image.
