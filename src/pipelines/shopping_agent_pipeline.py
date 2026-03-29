@@ -77,7 +77,9 @@ class SearchCandidate(BaseModel):
     title: str
     price: Optional[str] = None
     source: str
+    image_url: Optional[str] = None
     shop_name: Optional[str] = None
+    specs: Optional[str] = None
     match_reason: str
 
 
@@ -86,6 +88,7 @@ class VerifiedCandidate(BaseModel):
     title: str
     price: Optional[str] = None
     source: str
+    image_url: Optional[str] = None
     shop_name: Optional[str] = None
     page_title: Optional[str] = None
     page_price: Optional[str] = None
@@ -99,6 +102,7 @@ class ColorVerifiedCandidate(BaseModel):
     title: str
     price: Optional[str] = None
     source: str
+    image_url: Optional[str] = None
     shop_name: Optional[str] = None
     spec_confidence: Literal["HIGH", "MEDIUM", "LOW"] = "MEDIUM"
     confidence_note: str = ""
@@ -303,7 +307,8 @@ def _stage_search(spec: ProductSpec) -> list[SearchCandidate]:
                 log.info("search    candidate  url=%s  title=%.80s  price=%s", c.url, c.title, c.price)
                 candidates.append(SearchCandidate(
                     url=c.url, title=c.title, price=c.price,
-                    source=c.source, shop_name=c.shop_name,
+                    source=c.source, image_url=c.image_url,
+                    shop_name=c.shop_name, specs=c.specs,
                     match_reason=c.match_reason,
                 ))
         log.info("search  OUTPUT  total_candidates=%d", len(candidates))
@@ -385,6 +390,7 @@ def _stage_verify(spec: ProductSpec, candidates: list[SearchCandidate]) -> list[
             title=c.title,
             price=c.price,
             source=c.source,
+            image_url=c.image_url,
             shop_name=c.shop_name,
             page_title=page.get("title"),
             page_price=page.get("price"),
@@ -410,8 +416,13 @@ def _stage_color_verify(
     results: list[ColorVerifiedCandidate] = []
     for c in candidates[:8]:
         try:
-            log.info("color_verify  fetching_images  url=%s", c.url)
-            image_urls = fetch_images(c.url, max_images=2)
+            # Prefer the image_url already captured from search results
+            if c.image_url:
+                image_urls = [c.image_url]
+                log.info("color_verify  using_search_image  url=%s  image=%s", c.url, c.image_url)
+            else:
+                log.info("color_verify  fetching_images  url=%s", c.url)
+                image_urls = fetch_images(c.url, max_images=2)
             log.info("color_verify  images_found=%d  url=%s", len(image_urls), c.url)
 
             if not image_urls:
@@ -451,6 +462,7 @@ def _stage_color_verify(
             title=c.title,
             price=c.price,
             source=c.source,
+            image_url=c.image_url,
             shop_name=c.shop_name,
             spec_confidence=c.spec_confidence,
             confidence_note=c.confidence_note,

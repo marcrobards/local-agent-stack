@@ -92,7 +92,9 @@ class Candidate:
     price: Optional[str]
     match_reason: str
     source: str
+    image_url: Optional[str] = None
     shop_name: Optional[str] = None
+    specs: Optional[str] = None
 
 
 @dataclass
@@ -173,7 +175,6 @@ async def search_source(query: str, source: str) -> SearchResult:
             browser=browser,
             max_actions_per_step=3,
             tool_call_in_content=False,
-            skills=['75d9f278-01ba-48e6-be98-ac4783985527'],
         )
         run_result = await agent.run(max_steps=MAX_STEPS)
         raw = run_result.final_result()
@@ -208,20 +209,20 @@ def _build_task(query: str, source: str, cfg: dict, max_results: int) -> str:
 
 You are searching {label} for: "{query}"
 
-From the search results page, extract up to {max_results} product listings that could plausibly match this search. Do not open individual product pages.
+From the search results page, extract up to {max_results} product listings. Do not open individual product pages. Do not spend time evaluating whether a product is a perfect match — just collect listings that appear for this search.
 
 For each listing extract:
 - Product title (as listed)
 - Price (if visible; include sale price if shown)
-- Full product URL (the direct link to the product page){shop_field}
-- One short phrase explaining why it is a plausible match (based on title/description only — do not evaluate color)
-
-Ignore sponsored listings, ads, and unrelated category results.
+- Full product URL (the direct link to the product page)
+- Product image URL (the src of the product thumbnail/image on the search results page){shop_field}
+- Any visible specs (size, color, dimensions, material — whatever is shown on the results page)
+- One short phrase noting what it appears to be
 
 Return ONLY a JSON array. No prose before or after. Each item must have these keys:
-  title, price, url, match_reason{', shop_name' if source in ('etsy', 'poshmark') else ''}
+  title, price, url, image_url, specs, match_reason{', shop_name' if source in ('etsy', 'poshmark') else ''}
 
-If fewer than {max_results} plausible results exist, return however many there are.
+If fewer than {max_results} results exist, return however many there are.
 If the page fails to load or returns no results, return an empty array: []
 """
 
@@ -261,7 +262,9 @@ def _parse_results(raw: Optional[str], source: str, label: str) -> list[Candidat
             price=item.get("price"),
             match_reason=item.get("match_reason", ""),
             source=source,
+            image_url=item.get("image_url"),
             shop_name=item.get("shop_name"),
+            specs=item.get("specs"),
         ))
     return candidates
 
@@ -324,6 +327,10 @@ def format_results(results: list[SearchResult]) -> str:
             lines.append(f"URL: {c.url}")
             lines.append(f"Title: {c.title}")
             lines.append(f"Price: {c.price or 'not listed'}")
+            if c.image_url:
+                lines.append(f"Image: {c.image_url}")
+            if c.specs:
+                lines.append(f"Specs: {c.specs}")
             if c.shop_name:
                 lines.append(f"Shop: {c.shop_name}")
             lines.append(f"Match reason: {c.match_reason}")
@@ -362,6 +369,8 @@ async def _main():
                 "url": c.url,
                 "title": c.title,
                 "price": c.price,
+                "image_url": c.image_url,
+                "specs": c.specs,
                 "shop_name": c.shop_name,
                 "match_reason": c.match_reason,
             })
