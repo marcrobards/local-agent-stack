@@ -15,7 +15,7 @@ import sys
 import os
 import re
 from pathlib import Path
-from typing import Generator, Iterator, Union
+from typing import Any, Generator, Iterator, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,55 @@ STAGE_OUTPUT_DIR  = Path(os.getenv("STAGE_OUTPUT_DIR", "/app/local-agent-stack/o
 
 
 # ---------------------------------------------------------------------------
+# Stage contracts — typed data flowing between stages
+# ---------------------------------------------------------------------------
+
+class ProductSpec(BaseModel):
+    product_type: str
+    color: str
+    size: Optional[str] = None
+    material: Optional[str] = None
+    brand_preference: Optional[str] = None
+    is_clothing: bool = False
+    search_query: str
+    summary: str
+
+
+class SearchCandidate(BaseModel):
+    url: str
+    title: str
+    price: Optional[str] = None
+    source: str
+    shop_name: Optional[str] = None
+    match_reason: str
+
+
+class VerifiedCandidate(BaseModel):
+    url: str
+    title: str
+    price: Optional[str] = None
+    source: str
+    shop_name: Optional[str] = None
+    page_title: Optional[str] = None
+    page_price: Optional[str] = None
+    available: bool = True
+    spec_confidence: Literal["HIGH", "MEDIUM", "LOW"] = "MEDIUM"
+    confidence_note: str = ""
+
+
+class ColorVerifiedCandidate(BaseModel):
+    url: str
+    title: str
+    price: Optional[str] = None
+    source: str
+    shop_name: Optional[str] = None
+    spec_confidence: Literal["HIGH", "MEDIUM", "LOW"] = "MEDIUM"
+    confidence_note: str = ""
+    color_result: Literal["PASS", "FAIL", "AMBIGUOUS"] = "AMBIGUOUS"
+    color_note: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -72,10 +121,18 @@ def _new_session_dir() -> Path:
     return session_dir
 
 
-def _save_stage(session_dir: Path, filename: str, content: str) -> None:
+def _save_stage(session_dir: Path, filename: str, content) -> None:
     path = session_dir / filename
-    path.write_text(content, encoding="utf-8")
-    log.info("stage_output  saved %s (%d bytes)", path, len(content))
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, BaseModel):
+        text = content.model_dump_json(indent=2)
+    elif isinstance(content, list):
+        text = json.dumps([c.model_dump() for c in content], indent=2)
+    else:
+        text = json.dumps(content, indent=2)
+    path.write_text(text, encoding="utf-8")
+    log.info("stage_output  saved %s (%d bytes)", path, len(text))
 
 
 def _ollama_chat(model: str, messages: list) -> str:
@@ -153,8 +210,58 @@ def _store_session(original_request: str, confirmed_spec: str) -> None:
         log.warning("memory_store  FAILED", exc_info=True)
 
 
-def _extract_urls(text: str) -> list[str]:
-    return re.findall(r"https?://[^\s\n\"'>]+", text)
+def _parse_llm_json(text: str) -> Any:
+    """Extract a JSON object or array from an LLM response, stripping markdown fences."""
+    cleaned = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+    for start_char, end_char in [("{", "}"), ("[", "]")]:
+        start = cleaned.find(start_char)
+        end = cleaned.rfind(end_char)
+        if start != -1 and end > start:
+            return json.loads(cleaned[start:end + 1])
+    return json.loads(cleaned)
+
+
+def _extract_spec(confirmed_text: str) -> ProductSpec:
+    """Ask the LLM to extract a structured ProductSpec from the confirmed prose."""
+    log.info("extract_spec  INPUT  len=%d", len(confirmed_text))
+    result = _text_chat([
+        {"role": "system", "content": (
+            "Extract the product specification from the confirmed summary below. "
+            "Return ONLY valid JSON with these exact keys:\n"
+            '  "product_type": string — what the product is\n'
+            '  "color": string — full color description from the spec\n'
+            '  "size": string or null — dimensions or size if mentioned\n'
+            '  "material": string or null — material or fabric if mentioned\n'
+            '  "brand_preference": string or null — brand preference or null\n'
+            '  "is_clothing": boolean — true if this is a clothing/apparel item\n'
+            '  "search_query": string — the single best search query to find this product online\n'
+            '  "summary": string — the confirmed spec text, copied as-is\n'
+            "\nReturn ONLY the JSON object. No other text."
+        )},
+        {"role": "user", "content": confirmed_text},
+    ])
+    data = _parse_llm_json(result)
+    spec = ProductSpec.model_validate(data)
+    log.info("extract_spec  OUTPUT  product_type=%s  query=%s", spec.product_type, spec.search_query)
+    return spec
+
+
+def _parse_color_assessment(text: str) -> tuple[str, str]:
+    """Parse PASS/FAIL/AMBIGUOUS and note from vision model output."""
+    result = "AMBIGUOUS"
+    note = text.strip()
+
+    for line in text.strip().splitlines():
+        lower = line.lower().strip()
+        if "color result" in lower or lower.startswith("result"):
+            if "pass" in lower:
+                result = "PASS"
+            elif "fail" in lower:
+                result = "FAIL"
+        elif "color note" in lower or lower.startswith("note"):
+            note = line.split(":", 1)[-1].strip() if ":" in line else line.strip()
+
+    return result, note
 
 
 # ---------------------------------------------------------------------------
@@ -177,166 +284,195 @@ def _stage_clarify(conversation: list) -> str:
     return result
 
 
-def _stage_search(spec: str) -> str:
+def _stage_search(spec: ProductSpec) -> list[SearchCandidate]:
+    """Search all sources. No LLM — tools return structured candidates directly."""
     log.info("━━━ STAGE: search ━━━")
-    log.info("search  INPUT  spec=%.500s", spec)
-    system = _load_prompt("02-search")
-    tool_results = _run_search_tools(spec)
-    log.info("search  tool_results_len=%d", len(tool_results))
-
-    user_content = spec
-    if tool_results:
-        user_content += f"\n\n--- Live search results ---\n{tool_results}"
-
-    result = _text_chat([
-        {"role": "system",  "content": system},
-        {"role": "user",    "content": user_content},
-    ])
-    log.info("search  OUTPUT  len=%d  preview=%.500s", len(result), result)
-    return result
-
-
-def _run_search_tools(spec: str) -> str:
+    log.info("search  INPUT  query=%s  is_clothing=%s", spec.search_query, spec.is_clothing)
     try:
-        from search import search_all, format_results
-        query = spec.split("\n")[0][:120]
+        from search import search_all
         sources = ["amazon", "google_shopping", "etsy", "target", "walmart"]
-        log.info("search_tools  query=%.120s  sources=%s", query, sources)
-        results = asyncio.run(search_all(query, sources=sources))
-        formatted = format_results(results)
-        log.info("search_tools  results=%d sources  formatted_len=%d", len(results), len(formatted))
+        if spec.is_clothing:
+            sources.append("poshmark")
+        log.info("search  sources=%s", sources)
+        results = asyncio.run(search_all(spec.search_query, sources=sources))
+        candidates = []
         for r in results:
-            log.info("search_tools  source=%s  candidates=%d  error=%s  elapsed=%.1fs",
+            log.info("search  source=%s  candidates=%d  error=%s  elapsed=%.1fs",
                      r.source, len(r.candidates), r.error, r.elapsed)
             for c in r.candidates:
-                log.info("search_tools    candidate  url=%s  title=%.80s  price=%s", c.url, c.title, c.price)
-        return formatted
+                log.info("search    candidate  url=%s  title=%.80s  price=%s", c.url, c.title, c.price)
+                candidates.append(SearchCandidate(
+                    url=c.url, title=c.title, price=c.price,
+                    source=c.source, shop_name=c.shop_name,
+                    match_reason=c.match_reason,
+                ))
+        log.info("search  OUTPUT  total_candidates=%d", len(candidates))
+        return candidates
     except Exception:
-        log.error("search_tools  FAILED", exc_info=True)
-        return ""
+        log.error("search  FAILED", exc_info=True)
+        return []
 
 
-def _stage_verify(spec: str, candidates: str) -> str:
+def _stage_verify(spec: ProductSpec, candidates: list[SearchCandidate]) -> list[VerifiedCandidate]:
+    """Fetch each page, filter dead links, then ask the LLM for spec confidence."""
     log.info("━━━ STAGE: verify ━━━")
-    log.info("verify  INPUT  spec_len=%d  candidates_len=%d", len(spec), len(candidates))
-    urls = _extract_urls(candidates)
-    log.info("verify  INPUT  urls_found=%d  urls=%s", len(urls), urls[:10])
-    system = _load_prompt("02-verify")
-    page_data = _run_verify_tools(candidates)
-    log.info("verify  page_data_len=%d", len(page_data))
+    log.info("verify  INPUT  candidates=%d", len(candidates))
+    from fetch_page import fetch_page
 
-    user_content = f"Confirmed product spec:\n{spec}\n\nCandidates:\n{candidates}"
-    if page_data:
-        user_content += f"\n\n--- Fetched page data ---\n{page_data}"
+    live: list[tuple[SearchCandidate, dict]] = []
+    for c in candidates[:10]:
+        try:
+            log.info("verify  fetching  url=%s", c.url)
+            page = fetch_page(c.url)
+            status = page.get("status", "DEAD")
+            log.info("verify  result  url=%s  status=%s  available=%s",
+                     c.url, status, page.get("available"))
+            if status == "DEAD":
+                continue
+            live.append((c, page))
+        except Exception:
+            log.warning("verify  fetch_failed  url=%s", c.url, exc_info=True)
 
-    result = _text_chat([
-        {"role": "system", "content": system},
-        {"role": "user",   "content": user_content},
-    ])
-    log.info("verify  OUTPUT  len=%d  preview=%.500s", len(result), result)
-    return result
+    if not live:
+        log.info("verify  OUTPUT  no live candidates")
+        return []
 
+    assessment_input = json.dumps({
+        "spec": spec.model_dump(),
+        "candidates": [
+            {
+                "url": c.url,
+                "title": c.title,
+                "price": c.price,
+                "source": c.source,
+                "page_title": page.get("title"),
+                "page_price": page.get("price"),
+                "page_description": page.get("description"),
+            }
+            for c, page in live
+        ],
+    }, indent=2)
 
-def _run_verify_tools(candidates: str) -> str:
+    system = (
+        "You are assessing how well each candidate product matches the spec. "
+        "For each candidate, compare its page data against the spec on all "
+        "attributes EXCEPT color (color is assessed separately).\n\n"
+        "Return ONLY a JSON array. Each item must have:\n"
+        '- "url" (string): the candidate URL\n'
+        '- "spec_confidence" (string): "HIGH", "MEDIUM", or "LOW"\n'
+        '- "confidence_note" (string): one sentence explaining the assessment\n\n'
+        "HIGH = all non-color attributes clearly match.\n"
+        "MEDIUM = most match but one is uncertain.\n"
+        "LOW = plausibly relevant but key details missing or unclear."
+    )
+
+    assessments: dict[str, dict] = {}
     try:
-        from fetch_page import fetch_page
-        rows = []
-        for url in _extract_urls(candidates)[:10]:
-            try:
-                log.info("verify_tool  fetching  url=%s", url)
-                d = fetch_page(url)
-                log.info("verify_tool  result  url=%s  status=%s  title=%.80s  price=%s  available=%s  redirect=%s",
-                         url, d.get('status'), d.get('title'), d.get('price'),
-                         d.get('available'), d.get('redirect_url'))
-                rows.append(
-                    f"URL: {url}\n"
-                    f"Status: {d.get('status','UNKNOWN')}\n"
-                    f"Title: {d.get('title','')}\n"
-                    f"Price: {d.get('price','')}\n"
-                    f"Available: {d.get('available', False)}\n"
-                )
-            except Exception:
-                log.warning("verify_tool  FAILED  url=%s", url, exc_info=True)
-                rows.append(f"URL: {url}\nStatus: DEAD\n")
-        return "\n".join(rows)
+        result = _text_chat([
+            {"role": "system", "content": system},
+            {"role": "user", "content": assessment_input},
+        ])
+        for a in _parse_llm_json(result):
+            assessments[a["url"]] = a
     except Exception:
-        log.error("verify_tools  FAILED (import or setup)", exc_info=True)
-        return ""
+        log.warning("verify  LLM assessment failed, defaulting to MEDIUM", exc_info=True)
+
+    verified = []
+    for c, page in live:
+        a = assessments.get(c.url, {})
+        verified.append(VerifiedCandidate(
+            url=c.url,
+            title=c.title,
+            price=c.price,
+            source=c.source,
+            shop_name=c.shop_name,
+            page_title=page.get("title"),
+            page_price=page.get("price"),
+            available=page.get("available", False),
+            spec_confidence=a.get("spec_confidence", "MEDIUM"),
+            confidence_note=a.get("confidence_note", "Assessment unavailable"),
+        ))
+
+    log.info("verify  OUTPUT  verified=%d", len(verified))
+    return verified
 
 
-def _stage_color_verify(spec: str, verified: str) -> str:
+def _stage_color_verify(
+    spec: ProductSpec, candidates: list[VerifiedCandidate]
+) -> list[ColorVerifiedCandidate]:
+    """Fetch images, run vision model, parse results. No summary LLM call."""
     log.info("━━━ STAGE: color_verify ━━━")
-    log.info("color_verify  INPUT  spec_len=%d  verified_len=%d", len(spec), len(verified))
-    system = _load_prompt("02a-color-verify")
-    vision_results = _run_color_verify_tools(spec, verified)
-    log.info("color_verify  vision_results_len=%d", len(vision_results))
+    log.info("color_verify  INPUT  candidates=%d", len(candidates))
+    import base64
+    import requests as req
+    from fetch_images import fetch_images
 
-    user_content = f"Color spec:\n{spec}\n\nVerified candidates:\n{verified}"
-    if vision_results:
-        user_content += f"\n\n--- Vision color assessments ---\n{vision_results}"
+    results: list[ColorVerifiedCandidate] = []
+    for c in candidates[:8]:
+        try:
+            log.info("color_verify  fetching_images  url=%s", c.url)
+            image_urls = fetch_images(c.url, max_images=2)
+            log.info("color_verify  images_found=%d  url=%s", len(image_urls), c.url)
 
-    result = _text_chat([
-        {"role": "system", "content": system},
-        {"role": "user",   "content": user_content},
-    ])
-    log.info("color_verify  OUTPUT  len=%d  preview=%.500s", len(result), result)
-    return result
-
-
-def _run_color_verify_tools(spec: str, candidates: str) -> str:
-    try:
-        import base64
-        import requests as req
-        from fetch_images import fetch_images
-
-        rows = []
-        for url in _extract_urls(candidates)[:8]:
-            try:
-                log.info("color_tool  fetching_images  url=%s", url)
-                image_urls = fetch_images(url, max_images=2)
-                log.info("color_tool  images_found=%d  url=%s  image_urls=%s", len(image_urls), url, image_urls[:2])
-                if not image_urls:
-                    continue
+            if not image_urls:
+                color_result, color_note = "AMBIGUOUS", "Could not fetch product images"
+            else:
                 img_resp = req.get(image_urls[0], timeout=10)
                 img_resp.raise_for_status()
                 img_b64 = base64.b64encode(img_resp.content).decode("utf-8")
 
-                log.info("color_tool  vision_assess  url=%s  image=%s  img_size=%d bytes",
-                         url, image_urls[0], len(img_resp.content))
+                log.info("color_verify  vision_assess  url=%s  img_size=%d bytes",
+                         c.url, len(img_resp.content))
                 assessment = _ollama_chat(VISION_MODEL, [{
                     "role": "user",
                     "content": (
-                        f"Product URL: {url}\n"
-                        f"Color spec: {spec}\n\n"
+                        f"Product URL: {c.url}\n"
+                        f"Color spec: {spec.color}\n\n"
                         "Assess this product image against the color spec.\n"
-                        "Reply with:\nColor result: PASS / FAIL / AMBIGUOUS\n"
+                        "Reply with EXACTLY two lines:\n"
+                        "Color result: PASS / FAIL / AMBIGUOUS\n"
                         "Color note: [one or two sentences]"
                     ),
                     "images": [img_b64],
                 }])
-                log.info("color_tool  assessment  url=%s  result=%.200s", url, assessment)
-                rows.append(f"URL: {url}\n{assessment}\n")
-            except Exception as e:
-                log.warning("color_tool  FAILED  url=%s  error=%s", url, e, exc_info=True)
-                rows.append(
-                    f"URL: {url}\nColor result: AMBIGUOUS\n"
-                    f"Color note: Could not fetch image ({e})\n"
-                )
-        return "\n".join(rows)
-    except Exception:
-        log.error("color_verify_tools  FAILED (import or setup)", exc_info=True)
-        return ""
+                log.info("color_verify  assessment  url=%s  raw=%.200s", c.url, assessment)
+                color_result, color_note = _parse_color_assessment(assessment)
+
+        except Exception as e:
+            log.warning("color_verify  FAILED  url=%s  error=%s", c.url, e, exc_info=True)
+            color_result, color_note = "AMBIGUOUS", f"Could not fetch image ({e})"
+
+        log.info("color_verify  url=%s  result=%s", c.url, color_result)
+        if color_result == "FAIL":
+            continue
+
+        results.append(ColorVerifiedCandidate(
+            url=c.url,
+            title=c.title,
+            price=c.price,
+            source=c.source,
+            shop_name=c.shop_name,
+            spec_confidence=c.spec_confidence,
+            confidence_note=c.confidence_note,
+            color_result=color_result,
+            color_note=color_note,
+        ))
+
+    log.info("color_verify  OUTPUT  passed=%d", len(results))
+    return results
 
 
-def _stage_present(spec: str, color_verified: str) -> str:
+def _stage_present(spec: ProductSpec, candidates: list[ColorVerifiedCandidate]) -> str:
+    """Format structured results into user-facing prose. This is the one stage where the LLM writes freely."""
     log.info("━━━ STAGE: present ━━━")
-    log.info("present  INPUT  spec_len=%d  color_verified_len=%d", len(spec), len(color_verified))
+    log.info("present  INPUT  candidates=%d", len(candidates))
+    input_data = json.dumps({
+        "spec_summary": spec.summary,
+        "candidates": [c.model_dump() for c in candidates],
+    }, indent=2)
     result = _text_chat([
         {"role": "system", "content": _load_prompt("03-present")},
-        {"role": "user",   "content": (
-            f"Confirmed product spec:\n{spec}\n\n"
-            f"Color-verified candidates:\n{color_verified}"
-        )},
+        {"role": "user",   "content": input_data},
     ])
     log.info("present  OUTPUT  len=%d  preview=%.500s", len(result), result)
     return result
@@ -453,9 +589,9 @@ class Pipeline:
         def run() -> Generator:
 
             # --- Clarification phase ---
-            confirmed, spec = _is_spec_confirmed(messages)
+            confirmed, spec_text = _is_spec_confirmed(messages)
             log.info("pipe  confirmed=%s  spec_len=%d  user_message=%.200s",
-                     confirmed, len(spec), user_message)
+                     confirmed, len(spec_text), user_message)
 
             if not confirmed:
                 yield _stage_clarify(messages)
@@ -464,30 +600,33 @@ class Pipeline:
             # --- Full pipeline ---
             log.info("══════════════ PIPELINE START ══════════════")
             session_dir = _new_session_dir()
-            _save_stage(session_dir, "00-spec.md", spec)
-            yield "✓ Got it, searching now…\n\n"
 
+            yield "✓ Got it, extracting spec…\n\n"
+            spec = _extract_spec(spec_text)
+            _save_stage(session_dir, "00-spec.json", spec)
+
+            yield "🔍 Searching…\n\n"
             candidates = _stage_search(spec)
-            _save_stage(session_dir, "01-search.md", candidates)
-            yield "🔍 Links found, verifying…\n\n"
+            _save_stage(session_dir, "01-search.json", candidates)
 
+            yield "✅ Verifying links…\n\n"
             verified = _stage_verify(spec, candidates)
-            _save_stage(session_dir, "02-verify.md", verified)
-            yield "✅ Links verified, checking colors…\n\n"
+            _save_stage(session_dir, "02-verify.json", verified)
 
+            yield "🎨 Checking colors…\n\n"
             color_verified = _stage_color_verify(spec, verified)
-            _save_stage(session_dir, "03-color-verify.md", color_verified)
-            yield "🎨 Colors checked, putting results together…\n\n"
+            _save_stage(session_dir, "03-color-verify.json", color_verified)
 
+            yield "📝 Putting results together…\n\n"
             result = _stage_present(spec, color_verified)
             _save_stage(session_dir, "04-present.md", result)
 
             # Store session in memory after success
             original_request = next(
                 (m["content"] for m in messages if m["role"] == "user"),
-                spec,
+                spec_text,
             )
-            _store_session(original_request, spec)
+            _store_session(original_request, spec_text)
             log.info("══════════════ PIPELINE COMPLETE ══════════════")
             log.info("stage_output  session_dir=%s", session_dir)
 
