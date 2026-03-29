@@ -37,7 +37,7 @@ from ollama import Client as OllamaClient
 OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL",  "http://ollama:11434")
 TEXT_MODEL       = os.getenv("OLLAMA_LLM_MODEL",    "qwen2.5:7b")
 VISION_MODEL     = os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b")
-DANIELLE_USER_ID = os.getenv("DANIELLE_USER_ID",    "danielle")
+USER_ID = os.getenv("USER_ID",    "user_1")
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ def _recall_danielle(query: str) -> str:
     """Pull relevant memories for the user. Fails silently if mem0 is down."""
     try:
         from memory import mem
-        hits = mem.search(query, user_id=DANIELLE_USER_ID, limit=5)
+        hits = mem.search(query, user_id=USER_ID, limit=5)
         results = hits.get("results", [])
         if not results:
             return ""
@@ -76,7 +76,7 @@ def _store_session(original_request: str, confirmed_spec: str) -> None:
                 {"role": "user",      "content": original_request},
                 {"role": "assistant", "content": confirmed_spec},
             ],
-            user_id=DANIELLE_USER_ID,
+            user_id=USER_ID,
             metadata={"type": "shopping_session", "workflow": "online-shopping"},
         )
     except Exception:
@@ -280,7 +280,7 @@ class Pipeline:
             default="qwen2.5vl:7b",
             description="Model for color verification (stage 02a)"
         )
-        DANIELLE_USER_ID: str = Field(
+        USER_ID: str = Field(
             default="danielle",
             description="mem0 user_id for the user's memory scope"
         )
@@ -312,11 +312,11 @@ class Pipeline:
         """
 
         # Apply valve overrides to module-level config
-        global OLLAMA_BASE_URL, TEXT_MODEL, VISION_MODEL, DANIELLE_USER_ID
+        global OLLAMA_BASE_URL, TEXT_MODEL, VISION_MODEL, USER_ID
         OLLAMA_BASE_URL  = self.valves.OLLAMA_BASE_URL
         TEXT_MODEL       = self.valves.TEXT_MODEL
         VISION_MODEL     = self.valves.VISION_MODEL
-        DANIELLE_USER_ID = self.valves.DANIELLE_USER_ID
+        USER_ID = self.valves.USER_ID
 
         def run() -> Generator:
 

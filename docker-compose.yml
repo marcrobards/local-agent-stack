@@ -100,7 +100,7 @@ services:
       - QDRANT_COLLECTION=agent_memory
       - OLLAMA_EMBED_MODEL=nomic-embed-text:latest
       - OLLAMA_EMBED_DIMS=768
-      - DANIELLE_USER_ID=danielle
+      - USER_ID=danielle
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
     depends_on:

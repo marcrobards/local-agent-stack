@@ -38,7 +38,7 @@ Edit `.env` and fill in the required values:
 |---|---|
 | `OLLAMA_VISION_MODEL` | Vision model for color verification (default: `qwen2.5vl:7b`) |
 | `SHOPPING_WORKFLOW_DIR` | Path to shopping workflow files (default: `workflows/online-shopping`) |
-| `DANIELLE_USER_ID` | User ID for the shopping agent's memory scope |
+| `USER_ID` | User ID for the shopping agent's memory scope |
 | `ANTHROPIC_API_KEY` | **Required** for the shopping agent's browser-use search stage |
 | `BROWSER_USE_API_KEY` | **Required** for the shopping agent's browser-use search stage |
 | `BESZEL_TOKEN` | Token for Beszel monitoring agent (see Beszel first-time setup in `docker-compose.yml`) |
