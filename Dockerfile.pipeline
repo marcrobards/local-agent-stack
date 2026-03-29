@@ -10,7 +10,10 @@ RUN pip install --no-cache-dir \
     requests \
     beautifulsoup4 \
     "browser-use>=0.12,<1" \
-    langchain-anthropic
+    langchain-anthropic \
+ && pip install --no-cache-dir \
+    "starlette<0.46" \
+    "fastapi<0.115"
 
 # Copy the whole repo into the image.
 # .dockerignore (below) keeps it trim.
