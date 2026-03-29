@@ -291,7 +291,7 @@ class Pipeline:
         self.name   = "Shopping Agent / "  # note the trailing space+slash — manifold prepends this to each pipe name
         self.valves = self.Valves()
 
-    def pipes(self) -> list[dict]:
+    def pipelines(self) -> list[dict]:
         return [{"id": "shopping_agent", "name": ""}]
 
     def pipe(
