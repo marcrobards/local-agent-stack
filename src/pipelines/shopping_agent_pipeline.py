@@ -51,7 +51,7 @@ OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL",  "http://ollama:11434")
 TEXT_MODEL       = os.getenv("OLLAMA_LLM_MODEL",    "qwen2.5:7b")
 VISION_MODEL     = os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b")
 USER_ID = os.getenv("USER_ID",    "user_1")
-LLM_PROVIDER     = os.getenv("LLM_PROVIDER", "ollama")           # "ollama" or "claude"
+LLM_PROVIDER     = os.getenv("LLM_PROVIDER", "claude")           # "ollama" or "claude"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 STAGE_OUTPUT_DIR  = Path(os.getenv("STAGE_OUTPUT_DIR", "/app/local-agent-stack/output"))
@@ -521,7 +521,7 @@ class Pipeline:
 
     class Valves(BaseModel):
         LLM_PROVIDER: str = Field(
-            default="ollama",
+            default="claude",
             description="LLM provider for text stages: 'ollama' (local) or 'claude' (Anthropic API)"
         )
         ANTHROPIC_API_KEY: str = Field(
