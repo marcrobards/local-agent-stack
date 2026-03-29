@@ -8,7 +8,9 @@ RUN pip install --no-cache-dir \
     python-dotenv \
     ollama \
     requests \
-    beautifulsoup4
+    beautifulsoup4 \
+    browser-use \
+    langchain-anthropic
 
 # Copy the whole repo into the image.
 # .dockerignore (below) keeps it trim.
