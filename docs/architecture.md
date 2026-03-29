@@ -109,7 +109,7 @@ Memory is namespaced by `user_id`. Convention:
 |---|---|---|
 | Agent-private | `"agent_1"`, `"agent_2"` | Permanent |
 | Shared across agents | `"shared"` | Permanent |
-| User-specific | `"danielle"` | Permanent |
+| User-specific | `"test_user"` | Permanent |
 | Session-scoped | `"session_<timestamp>"` | Cleared after session |
 
 ## Data flow

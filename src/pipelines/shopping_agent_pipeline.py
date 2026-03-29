@@ -69,7 +69,7 @@ def _ollama_chat(model: str, messages: list) -> str:
     return content
 
 
-def _recall_danielle(query: str) -> str:
+def _recall_user(query: str) -> str:
     """Pull relevant memories for the user. Fails silently if mem0 is down."""
     try:
         from memory import mem
@@ -115,7 +115,7 @@ def _stage_clarify(conversation: list) -> str:
     log.info("━━━ STAGE: clarify ━━━")
     log.info("clarify  INPUT  user_message=%.300s", conversation[-1]["content"])
     system = _load_prompt("01-clarify-request")
-    memory_context = _recall_danielle(conversation[-1]["content"])
+    memory_context = _recall_user(conversation[-1]["content"])
 
     messages = [{"role": "system", "content": system}]
     if memory_context:
@@ -347,7 +347,7 @@ class Pipeline:
             description="Model for color verification (stage 02a)"
         )
         USER_ID: str = Field(
-            default="danielle",
+            default="test_user",
             description="mem0 user_id for the user's memory scope"
         )
 

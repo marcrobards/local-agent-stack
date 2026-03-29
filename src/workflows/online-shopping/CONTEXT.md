@@ -24,8 +24,8 @@ in standard searches.
 
 ## Memory scoping
 
-- Read at stage 01: `user_id="danielle"` — their preferences, past searches
-- Written after stage 03: `user_id="danielle"` — successful session stored
+- Read at stage 01: `user_id="test_user"` — their preferences, past searches
+- Written after stage 03: `user_id="test_user"` — successful session stored
 - Session-scoped ephemeral data: `user_id="session_<timestamp>"`
 
 ## Models
