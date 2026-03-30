@@ -29,6 +29,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import quote_plus
 
 from browser_use import Agent, Browser, ChatAnthropic
 
@@ -198,7 +199,7 @@ def _build_task(query: str, source: str, cfg: dict, max_results: int) -> str:
 
     # Construct the search URL directly so the agent doesn't waste steps
     # navigating to the homepage first.
-    search_url = f"{cfg['url']}?{cfg['param']}={query.replace(' ', '+')}"
+    search_url = f"{cfg['url']}?{cfg['param']}={quote_plus(query)}"
     if "suffix" in cfg:
         search_url += cfg["suffix"]
 
