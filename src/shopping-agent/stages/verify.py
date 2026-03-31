@@ -9,8 +9,10 @@ Output: list of VerifiedCandidates with drop=False, sorted by match quality.
 """
 
 import asyncio
+import datetime
 import json
 import logging
+import os
 from typing import Optional
 
 import llm
@@ -182,6 +184,31 @@ async def verify_all(
         "verify_all  passed=%d  dropped=%d",
         len(verified), len(candidates) - len(verified),
     )
+
+    # Dump decisions for debugging
+    debug_dir = os.environ.get("DEBUG_OUTPUT_DIR", "/tmp")
+    ts = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    debug_path = os.path.join(debug_dir, f"verify_decisions_{ts}.json")
+    decisions = []
+    for r in results:
+        if isinstance(r, Exception):
+            decisions.append({"error": str(r)})
+            continue
+        decisions.append({
+            "url": r.raw.url,
+            "title": r.raw.title,
+            "vendor": r.raw.vendor,
+            "price": r.raw.price,
+            "spec_confidence": r.spec_confidence,
+            "color_result": r.color_result,
+            "color_description": r.color_description,
+            "summary": r.summary,
+            "drop": r.drop,
+        })
+    with open(debug_path, "w") as f:
+        json.dump(decisions, f, indent=2)
+    log.info("verify_all  decisions written to %s", debug_path)
+
     return verified
 
 
