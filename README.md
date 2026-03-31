@@ -8,10 +8,10 @@ A modular stack for running and orchestrating AI agents at home. Built increment
 
 ## Current state
 
-- ✅ Ollama — local LLM inference (qwen2.5:7b + qwen2.5vl:7b vision)
-- ✅ Memory layer — persistent shared memory for agents (mem0 + Qdrant + nomic-embed-text)
-- ✅ Open WebUI — chat interface with Pipelines server integration
-- ✅ Shopping agent — 5-stage product search pipeline running in Open WebUI
+- ✅ Ollama — local LLM inference (qwen2.5:7b + qwen2.5vl:7b vision + nomic-embed-text embeddings)
+- ✅ Memory layer — persistent shared memory for agents (mem0 + Qdrant)
+- ✅ Open WebUI — chat interface connected to the shopping agent
+- ✅ Shopping agent — 5-stage product search pipeline (standalone FastAPI service)
 - ✅ Monitoring — Beszel server + container monitoring
 
 ## Stack
@@ -21,94 +21,102 @@ A modular stack for running and orchestrating AI agents at home. Built increment
 | LLM inference | Run models locally | Ollama (qwen2.5:7b, qwen2.5vl:7b) |
 | Memory | Persistent agent memory | mem0 + Qdrant |
 | Embeddings | Semantic search | nomic-embed-text (via Ollama) |
-| Web search | Browser automation | Browser Use Cloud + Anthropic Claude Sonnet |
-| Chat UI | User-facing interface | Open WebUI + Pipelines server |
+| Web search | Browser automation | Browser Use Cloud + Anthropic Claude |
+| Chat UI | User-facing interface | Open WebUI |
+| Agent server | OpenAI-compatible API | FastAPI (shopping-agent) |
 | Monitoring | Server & container health | Beszel |
 | Containers | Service isolation | Docker Compose |
-| Language | Agent code | Python 3.11 (Pipelines container) |
+| Language | Agent code | Python 3.11 |
 
 ## Shopping agent
 
-A 5-stage pipeline that helps find specific products online, with color-accuracy verification via a vision model:
+A 5-stage pipeline that finds specific products online, with color-accuracy verification:
 
-1. **Clarify request** — conversational clarification using the user's stored preferences from memory
+1. **Clarify** — conversational spec gathering; handles vague color descriptions with targeted follow-ups
 2. **Search** — concurrent searches across Amazon, Google Shopping, Etsy, Target, Walmart (+ Poshmark for clothing) via Browser Use Cloud
-3. **Verify** — confirms each candidate URL is live and assesses spec match
-4. **Color verify** — vision model (qwen2.5vl:7b) checks product images against the color description
-5. **Present** — formats results with tappable links in Open WebUI
+3. **Verify** — confirms each candidate URL is live, assesses spec match, and checks color accuracy via Claude vision
+4. **Present** — formats results as markdown ordered by match quality
 
-Appears as "Shopping Agent" in the Open WebUI model dropdown.
+The agent runs as a standalone FastAPI service exposing an OpenAI-compatible `/v1/chat/completions` endpoint. Open WebUI connects to it as a custom model connection.
+
+> **Cloud dependencies for search:** `BROWSER_USE_API_KEY` (Browser Use Cloud) and `ANTHROPIC_API_KEY` (Anthropic) are required. Everything else runs locally.
 
 ## Repository layout
 
 ```
 local-agent-stack/
 ├── src/
-│   ├── agent-memory-layer/       # Memory layer (mem0 + Qdrant)
+│   ├── shopping-agent/               # Active shopping agent (FastAPI, v2)
+│   │   ├── app.py                    # Entrypoint, conversation state, stage orchestration
+│   │   ├── stages/
+│   │   │   ├── clarify.py
+│   │   │   ├── search.py
+│   │   │   ├── verify.py
+│   │   │   ├── present.py
+│   │   │   └── refine.py
+│   │   └── tests/
+│   ├── agent-memory-layer/           # Memory layer (mem0 + Qdrant)
 │   │   ├── memory/
-│   │   │   ├── __init__.py
-│   │   │   ├── client.py
-│   │   │   └── config.py
+│   │   │   ├── client.py             # mem singleton with Ollama timeout patch
+│   │   │   └── config.py             # mem0 config from env vars
 │   │   └── tests/
 │   ├── pipelines/
-│   │   └── shopping_agent_pipeline.py
+│   │   └── shopping_agent_pipeline.py  # v1 pipeline (inactive, superseded by v2)
 │   └── workflows/
-│       └── online-shopping/
-│           ├── 01-clarify-request/    # Stage prompts + tools
+│       └── online-shopping/          # Stage prompts and tools
+│           ├── 01-clarify-request/
 │           ├── 02-search/
 │           ├── 02-verify/
 │           ├── 02a-color-verify/
-│           ├── 03-present/
-│           └── tests/
+│           └── 03-present/
 ├── docs/
 │   ├── architecture.md
 │   ├── setup.md
 │   ├── memory-api.md
 │   ├── decisions.md
-│   └── server-specs.md
+│   ├── server-specs.md
+│   └── shopping-agent-state.md       # Detailed current state of the shopping agent
 ├── docker-compose.yml
-├── Dockerfile.pipeline
+├── Dockerfile.shopping-agent
+├── Dockerfile.pipeline               # v1 (inactive)
 ├── Dockerfile.browser-use
 ├── deploy
-├── .env.example
-└── README.md
+└── .env.example
 ```
 
 ## Quick start
 
 ```bash
-# Start core services
+# Start core services (Ollama, Open WebUI, Qdrant)
 docker compose up -d
 
-# Build and start the shopping pipeline
-docker compose build shopping-pipeline
-docker compose up -d shopping-pipeline
+# Build and start the shopping agent
+docker compose build shopping-agent
+docker compose up -d shopping-agent
 
 # Then in Open WebUI (http://localhost:3000):
 #   Admin Panel → Settings → Connections → + (add connection)
-#   URL:     http://shopping-pipeline:9099
-#   API Key: 0p3n-w3bu!
+#   URL:     http://shopping-agent:8000
+#   API Key: any value
 #   Save — "Shopping Agent" appears in the model dropdown.
 ```
 
-See [docs/setup.md](docs/setup.md) for full install instructions.
+See [docs/setup.md](docs/setup.md) for full install instructions and troubleshooting.
 
-## Smoke tests
+## Tests
 
 ```bash
-# Memory layer integration test
+# Memory layer integration test (requires Ollama + Qdrant running)
 python -m tests.smoke_test
 
-# Stage 01 — clarify request (requires Ollama)
-docker compose --profile tools run --rm smoke-test-stage02a
-
-# Stage 02 — browser-use search (requires ANTHROPIC_API_KEY + BROWSER_USE_API_KEY)
-docker compose --profile tools run --rm smoke-test-browser-use
+# Shopping agent unit tests
+cd src/shopping-agent && python -m pytest tests/
 ```
 
 ## Documentation
 
 - [Architecture](docs/architecture.md) — how the pieces fit together
+- [Shopping agent state](docs/shopping-agent-state.md) — detailed current status, known issues, stage breakdown
 - [Setup guide](docs/setup.md) — getting the stack running from scratch
 - [Memory API](docs/memory-api.md) — how agents read and write memory
 - [Decisions log](docs/decisions.md) — why we chose this stack

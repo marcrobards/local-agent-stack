@@ -109,7 +109,12 @@ def verify_candidate(
     else:
         raw_response = llm.chat([
             {"role": "system", "content": _VERIFY_SYSTEM},
-            {"role": "user", "content": text + "\n\nNote: No product images available."},
+            {"role": "user", "content": (
+                text
+                + "\n\nNote: No product images available. "
+                "Set color_result to AMBIGUOUS and color_description to "
+                "'No images provided — color could not be assessed'."
+            )},
         ])
 
     try:
