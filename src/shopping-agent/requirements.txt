@@ -1,0 +1,9 @@
+pydantic>=2.0
+anthropic
+ollama
+requests
+beautifulsoup4
+python-dotenv
+uvicorn
+fastapi
+pytest

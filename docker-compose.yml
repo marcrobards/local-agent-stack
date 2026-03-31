@@ -115,6 +115,40 @@ services:
     # ports:
     #   - "9099:9099"
 
+  # ── Shopping Agent v2 ─────────────────────────────────
+  # Standalone FastAPI service with OpenAI-compatible API.
+  # Replaces the Pipelines-based shopping-pipeline above.
+  #
+  # In Open WebUI:
+  #   Admin Panel → Settings → Connections → + (add connection)
+  #   URL:     http://shopping-agent:8000/v1
+  #   API Key: (any value)
+  #   Save — "shopping-agent" will appear in the model dropdown.
+
+  shopping-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.shopping-agent
+    container_name: shopping-agent
+    restart: unless-stopped
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-claude}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+      - SEARCH_LLM=${SEARCH_LLM:-anthropic}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-0}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_LLM_MODEL=qwen2.5:7b
+      - OLLAMA_VISION_MODEL=qwen2.5vl:7b
+      - USER_ID=${USER_ID:-user_1}
+    depends_on:
+      - ollama
+    # No ports exposed to host — Open WebUI reaches it via the internal network.
+    # Uncomment to test from the host:
+    # ports:
+    #   - "8000:8000"
+
   # ── Tools (opt-in) ─────────────────────────────────
 
   memory-chat:
