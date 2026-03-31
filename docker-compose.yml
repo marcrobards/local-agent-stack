@@ -142,6 +142,9 @@ services:
       - OLLAMA_LLM_MODEL=qwen2.5:7b
       - OLLAMA_VISION_MODEL=qwen2.5vl:7b
       - USER_ID=${USER_ID:-user_1}
+      - DEBUG_OUTPUT_DIR=/app/debug
+    volumes:
+      - ./debug:/app/debug
     depends_on:
       - ollama
     # No ports exposed to host — Open WebUI reaches it via the internal network.

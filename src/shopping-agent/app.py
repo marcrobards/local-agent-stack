@@ -106,6 +106,15 @@ async def _run_pipeline(spec_text: str, spec: "ProductSpec | None" = None) -> st
     candidates = flatten_candidates(search_results)
     log.info("pipeline  raw_candidates=%d", len(candidates))
 
+    # Dump search results for debugging
+    import os, datetime
+    debug_dir = os.environ.get("DEBUG_OUTPUT_DIR", "/tmp")
+    ts = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    debug_path = os.path.join(debug_dir, f"search_results_{ts}.json")
+    with open(debug_path, "w") as f:
+        json.dump([c.model_dump() for c in candidates], f, indent=2)
+    log.info("pipeline  search results written to %s", debug_path)
+
     if not candidates:
         return (
             f"I searched {len(spec.search_targets)} sites for a "
