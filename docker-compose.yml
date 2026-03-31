@@ -143,6 +143,7 @@ services:
       - OLLAMA_VISION_MODEL=qwen2.5vl:7b
       - USER_ID=${USER_ID:-user_1}
       - DEBUG_OUTPUT_DIR=/app/debug
+      - STAGE_OUTPUT_DIR=/app/debug
     volumes:
       - ./debug:/app/debug
     depends_on:
