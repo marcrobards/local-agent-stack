@@ -213,7 +213,7 @@ async def search_site(query: str, target: SearchTarget) -> SearchTaskResult:
 
     task = _build_task(query, target, config.SEARCH_MAX_RESULTS)
     llm = _make_llm()
-    browser = Browser(use_cloud=True, cloud_proxy_country_code="us")
+    browser = Browser(use_cloud=True)
 
     try:
         agent = Agent(
