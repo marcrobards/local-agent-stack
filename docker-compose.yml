@@ -84,36 +84,36 @@ services:
   #   API Key: 0p3n-w3bu!
   #   Save — "Shopping Agent" will appear in the model dropdown.
 
-  shopping-pipeline:
-    build:
-      context: .          # repo root — Dockerfile is at ./Dockerfile.pipeline
-      dockerfile: Dockerfile.pipeline
-    container_name: shopping-pipeline
-    restart: unless-stopped
-    environment:
-      - PIPELINES_API_KEY=0p3n-w3bu!
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_LLM_MODEL=qwen2.5:7b
-      - OLLAMA_VISION_MODEL=qwen2.5vl:7b
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=agent_memory
-      - OLLAMA_EMBED_MODEL=nomic-embed-text:latest
-      - OLLAMA_EMBED_DIMS=768
-      - USER_ID=test_user
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
-      - LLM_PROVIDER=${LLM_PROVIDER}
-      - SEARCH_LLM=${SEARCH_LLM}
-    volumes:
-      - ./output:/app/local-agent-stack/output
-    depends_on:
-      - ollama
-      - qdrant
-    # No ports exposed to host — Open WebUI reaches it via the internal network.
-    # If you ever need to test from the host, uncomment the line below:
-    # ports:
-    #   - "9099:9099"
+  # shopping-pipeline:
+  #   build:
+  #     context: .          # repo root — Dockerfile is at ./Dockerfile.pipeline
+  #     dockerfile: Dockerfile.pipeline
+  #   container_name: shopping-pipeline
+  #   restart: unless-stopped
+  #   environment:
+  #     - PIPELINES_API_KEY=0p3n-w3bu!
+  #     - OLLAMA_BASE_URL=http://ollama:11434
+  #     - OLLAMA_LLM_MODEL=qwen2.5:7b
+  #     - OLLAMA_VISION_MODEL=qwen2.5vl:7b
+  #     - QDRANT_HOST=qdrant
+  #     - QDRANT_PORT=6333
+  #     - QDRANT_COLLECTION=agent_memory
+  #     - OLLAMA_EMBED_MODEL=nomic-embed-text:latest
+  #     - OLLAMA_EMBED_DIMS=768
+  #     - USER_ID=test_user
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #     - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+  #     - LLM_PROVIDER=${LLM_PROVIDER}
+  #     - SEARCH_LLM=${SEARCH_LLM}
+  #   volumes:
+  #     - ./output:/app/local-agent-stack/output
+  #   depends_on:
+  #     - ollama
+  #     - qdrant
+  #   # No ports exposed to host — Open WebUI reaches it via the internal network.
+  #   # If you ever need to test from the host, uncomment the line below:
+  #   # ports:
+  #   #   - "9099:9099"
 
   # ── Shopping Agent v2 ─────────────────────────────────
   # Standalone FastAPI service with OpenAI-compatible API.
