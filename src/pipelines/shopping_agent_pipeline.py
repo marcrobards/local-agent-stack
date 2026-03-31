@@ -318,29 +318,45 @@ def _stage_search(spec: ProductSpec) -> list[SearchCandidate]:
         return []
 
 
-def _stage_verify(spec: ProductSpec, candidates: list[SearchCandidate]) -> list[VerifiedCandidate]:
-    """Fetch each page, filter dead links, then ask the LLM for spec confidence."""
+def _stage_verify(
+    spec: ProductSpec, candidates: list[SearchCandidate]
+) -> tuple[list[VerifiedCandidate], list[dict]]:
+    """Fetch each page, filter dead links, then ask the LLM for spec confidence.
+
+    Returns (verified_candidates, decisions) where decisions is a list of dicts
+    recording the outcome for every input candidate — useful for debugging.
+    """
     log.info("━━━ STAGE: verify ━━━")
     log.info("verify  INPUT  candidates=%d", len(candidates))
     from fetch_page import fetch_page
 
+    decisions: list[dict] = []
     live: list[tuple[SearchCandidate, dict]] = []
     for c in candidates[:10]:
+        decision: dict = {"url": c.url, "title": c.title, "source": c.source}
         try:
             log.info("verify  fetching  url=%s", c.url)
             page = fetch_page(c.url)
             status = page.get("status", "DEAD")
             log.info("verify  result  url=%s  status=%s  available=%s",
                      c.url, status, page.get("available"))
+            decision["fetch_status"] = status
+            decision["available"] = page.get("available")
             if status == "DEAD":
+                decision["outcome"] = "DROPPED_DEAD_LINK"
+                decisions.append(decision)
                 continue
             live.append((c, page))
-        except Exception:
+        except Exception as e:
             log.warning("verify  fetch_failed  url=%s", c.url, exc_info=True)
+            decision["fetch_status"] = "ERROR"
+            decision["fetch_error"] = str(e)
+            decision["outcome"] = "DROPPED_FETCH_ERROR"
+            decisions.append(decision)
 
     if not live:
         log.info("verify  OUTPUT  no live candidates")
-        return []
+        return [], decisions
 
     assessment_input = json.dumps({
         "spec": spec.model_dump(),
@@ -385,6 +401,8 @@ def _stage_verify(spec: ProductSpec, candidates: list[SearchCandidate]) -> list[
     verified = []
     for c, page in live:
         a = assessments.get(c.url, {})
+        spec_confidence = a.get("spec_confidence", "MEDIUM")
+        confidence_note = a.get("confidence_note", "Assessment unavailable")
         verified.append(VerifiedCandidate(
             url=c.url,
             title=c.title,
@@ -395,12 +413,24 @@ def _stage_verify(spec: ProductSpec, candidates: list[SearchCandidate]) -> list[
             page_title=page.get("title"),
             page_price=page.get("price"),
             available=page.get("available", False),
-            spec_confidence=a.get("spec_confidence", "MEDIUM"),
-            confidence_note=a.get("confidence_note", "Assessment unavailable"),
+            spec_confidence=spec_confidence,
+            confidence_note=confidence_note,
         ))
+        decisions.append({
+            "url": c.url,
+            "title": c.title,
+            "source": c.source,
+            "fetch_status": "LIVE",
+            "available": page.get("available"),
+            "page_title": page.get("title"),
+            "page_price": page.get("price"),
+            "spec_confidence": spec_confidence,
+            "confidence_note": confidence_note,
+            "outcome": "INCLUDED",
+        })
 
-    log.info("verify  OUTPUT  verified=%d", len(verified))
-    return verified
+    log.info("verify  OUTPUT  verified=%d  decisions=%d", len(verified), len(decisions))
+    return verified, decisions
 
 
 def _stage_color_verify(
@@ -622,8 +652,9 @@ class Pipeline:
             _save_stage(session_dir, "01-search.json", candidates)
 
             yield "✅ Verifying links…\n\n"
-            verified = _stage_verify(spec, candidates)
+            verified, verify_decisions = _stage_verify(spec, candidates)
             _save_stage(session_dir, "02-verify.json", verified)
+            _save_stage(session_dir, "02-verify-decisions.json", verify_decisions)
 
             yield "🎨 Checking colors…\n\n"
             color_verified = _stage_color_verify(spec, verified)
