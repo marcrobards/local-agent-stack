@@ -4,12 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Is
 
-A self-hosted AI agent platform running mostly locally via Ollama. The shopping agent's search stage uses cloud APIs (Anthropic + Browser Use Cloud); everything else runs on local hardware. The platform is layered so each layer is independently useful and loosely coupled.
+A self-hosted AI agent platform running mostly locally via Ollama. Cloud APIs are available for agent stages that require them; everything else runs on local hardware. The platform is layered so each layer is independently useful and loosely coupled.
 
 **Current implementation status:**
 - ✅ Ollama — local LLM inference (qwen2.5:7b + qwen2.5vl:7b vision + nomic-embed-text embeddings)
 - ✅ Memory layer — persistent shared memory (mem0 + Qdrant)
-- ✅ Shopping agent — 5-stage product search pipeline (Open WebUI Pipelines)
 - ✅ Web interface — Open WebUI chat interface
 - ✅ Monitoring — Beszel server + container monitoring
 
@@ -50,18 +49,11 @@ curl http://localhost:6333/healthz            # Qdrant
 
 ## Architecture
 
-The shopping agent is the primary pipeline. It runs inside an Open WebUI Pipelines server container and orchestrates 5 stages: clarify → search → verify → color verify → present.
-
 Agents import a Python singleton `mem` for memory access — this was a deliberate simplicity choice (easy to wrap in HTTP later if needed).
 
 ```
 User (Open WebUI)
-  → Shopping Agent Pipeline (Open WebUI Pipelines)
-    → 1. Clarify   — extract product requirements via qwen2.5:7b (Ollama)
-    → 2. Search    — Browser Use Cloud finds matching products
-    → 3. Verify    — fetch product pages, confirm details
-    → 4. Color     — fetch images, qwen2.5vl:7b (Ollama) verifies color
-    → 5. Present   — format final recommendations
+  → Agent Pipeline (Open WebUI Pipelines)
 
 Memory layer (available to all agents):
   → from memory import mem
@@ -78,10 +70,6 @@ Memory layer (available to all agents):
 - `user_id="session_<timestamp>"` — ephemeral
 
 **Key source files:**
-- `src/pipelines/shopping_agent_pipeline.py` — shopping agent pipeline (Open WebUI Pipelines)
-- `src/workflows/online-shopping/02-search/tools/search.py` — Browser Use Cloud search tool
-- `src/workflows/online-shopping/02-verify/tools/fetch_page.py` — link verification tool
-- `src/workflows/online-shopping/02a-color-verify/tools/fetch_images.py` — image fetcher for color verification
 - `src/agent-memory-layer/memory/client.py` — `mem` singleton with Ollama timeout patching
 - `src/agent-memory-layer/memory/config.py` — mem0 config built from environment variables
 - `src/agent-memory-layer/memory/__init__.py` — exports `mem` for agent imports

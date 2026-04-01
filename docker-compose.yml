@@ -89,40 +89,6 @@ services:
       - qdrant
       - ollama
 
-  smoke-test-stage02a:
-    profiles: ["tools"]
-    image: python:3.12-slim
-    container_name: smoke-test-stage02a
-    working_dir: /app
-    command: >
-      sh -c "pip install ollama requests --quiet &&
-             python src/workflows/online-shopping/tests/smoke_test_02a.py"
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_VISION_MODEL=qwen2.5vl:7b
-    volumes:
-      - .:/app
-    depends_on:
-      - ollama
-
-  smoke-test-browser-use:
-    profiles: ["tools"]
-    build:
-      context: ./src/workflows/online-shopping
-      dockerfile: Dockerfile.browser-use
-    container_name: smoke-test-browser-use
-    init: true
-    ipc: host
-    entrypoint: ["/app/.venv/bin/python"]
-    command: ["/app/tests/smoke_test_browser_use.py"]
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-0}
-      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
-    volumes:
-      - ./src/workflows/online-shopping/tests:/app/tests:ro
-    # No dependency on ollama — uses Anthropic cloud API + Browser Use Cloud
-
 
 volumes:
   ollama_data:

@@ -23,7 +23,7 @@ ollama pull nomic-embed-text:latest
 ```
 
 - `qwen2.5:7b` — LLM inference and memory extraction
-- `qwen2.5vl:7b` — vision model used for color verification in the shopping pipeline
+- `qwen2.5vl:7b` — vision model
 - `nomic-embed-text` — embeddings
 
 ## 3. Configure environment
@@ -36,11 +36,7 @@ Edit `.env` and fill in the required values:
 
 | Variable | Purpose |
 |---|---|
-| `OLLAMA_VISION_MODEL` | Vision model for color verification (default: `qwen2.5vl:7b`) |
-| `SHOPPING_WORKFLOW_DIR` | Path to shopping workflow files (default: `workflows/online-shopping`) |
-| `USER_ID` | User ID for the shopping agent's memory scope |
-| `ANTHROPIC_API_KEY` | **Required** for the shopping agent's browser-use search stage |
-| `BROWSER_USE_API_KEY` | **Required** for the shopping agent's browser-use search stage |
+| `OLLAMA_VISION_MODEL` | Vision model (default: `qwen2.5vl:7b`) |
 | `BESZEL_TOKEN` | Token for Beszel monitoring agent (see Beszel first-time setup in `docker-compose.yml`) |
 | `BESZEL_KEY` | Key for Beszel monitoring agent |
 
@@ -56,7 +52,6 @@ This starts all core services:
 - **Open WebUI** — chat interface (port 3000)
 - **Qdrant** — vector storage (ports 6333/6334)
 - **Beszel** — server/container monitoring (port 8090)
-- **shopping-pipeline** — Open WebUI Pipelines server for the shopping agent (internal network only)
 
 Verify services are running:
 
@@ -69,8 +64,6 @@ The Qdrant dashboard is available at http://localhost:6333/dashboard.
 
 ## 5. Set up Python environment (optional)
 
-The shopping pipeline runs inside Docker — no local Python setup is needed for it.
-
 For local memory layer development and testing:
 
 ```bash
@@ -78,23 +71,6 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r src/agent-memory-layer/requirements.txt
 ```
-
-## 6. Connect the shopping pipeline in Open WebUI
-
-Build the shopping pipeline image:
-
-```bash
-docker compose build shopping-pipeline
-```
-
-Then connect it in Open WebUI:
-
-1. Open http://localhost:3000
-2. Go to **Admin Panel → Settings → Connections**
-3. Click **+** to add a connection
-4. URL: `http://shopping-pipeline:9099`
-5. API Key: `0p3n-w3bu!`
-6. Save — "Shopping Agent" will appear in the model dropdown
 
 ## Smoke tests
 
@@ -130,22 +106,6 @@ Expected output:
 ```
 
 Note: writes are slow (5–15 seconds each) because mem0 calls the LLM to extract facts on every `mem.add()`. This is expected.
-
-### Color verify stage
-
-```bash
-docker compose --profile tools run --rm smoke-test-stage02a
-```
-
-Tests the vision model's color verification capability.
-
-### Browser-use search
-
-```bash
-docker compose --profile tools run --rm smoke-test-browser-use
-```
-
-Requires `ANTHROPIC_API_KEY` and `BROWSER_USE_API_KEY` to be set in `.env`.
 
 ## Troubleshooting
 

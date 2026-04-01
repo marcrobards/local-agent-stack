@@ -4,7 +4,7 @@ Instructions for AI agents working in this repository.
 
 ## Project Overview
 
-Self-hosted AI agent platform running locally via Ollama. The shopping agent's search stage uses cloud APIs (Anthropic + Browser Use Cloud); everything else runs on local hardware. Layers are independently useful and loosely coupled.
+Self-hosted AI agent platform running locally via Ollama. Cloud APIs are available for agent stages that require them; everything else runs on local hardware. Layers are independently useful and loosely coupled.
 
 ## Stack
 
@@ -17,23 +17,12 @@ Self-hosted AI agent platform running locally via Ollama. The shopping agent's s
 
 ## Architecture
 
-The shopping agent pipeline (`src/pipelines/shopping_agent_pipeline.py`) orchestrates 5 stages:
-1. **Clarify** — extract product requirements via Ollama
-2. **Search** — Browser Use Cloud finds matching products
-3. **Verify** — fetch product pages, confirm details
-4. **Color verify** — fetch images, vision model verifies color
-5. **Present** — format final recommendations
-
 Memory is accessed via a Python singleton `from memory import mem` (`mem.add()` / `mem.search()`). Memory scoping uses `user_id`: `"agent_1"` (private), `"shared"` (cross-agent), `"session_<timestamp>"` (ephemeral).
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/pipelines/shopping_agent_pipeline.py` | Shopping agent pipeline |
-| `src/workflows/online-shopping/02-search/tools/search.py` | Browser Use Cloud search |
-| `src/workflows/online-shopping/02-verify/tools/fetch_page.py` | Link verification |
-| `src/workflows/online-shopping/02a-color-verify/tools/fetch_images.py` | Image fetch for color check |
 | `src/agent-memory-layer/memory/client.py` | `mem` singleton + Ollama timeout patching |
 | `src/agent-memory-layer/memory/config.py` | mem0 config from env vars |
 | `src/agent-memory-layer/memory/__init__.py` | Exports `mem` |
@@ -56,7 +45,7 @@ curl http://localhost:6333/healthz            # Qdrant health
 - **Memory access:** Always use the `mem` singleton — do not instantiate mem0 directly.
 - **Python deps:** `src/agent-memory-layer/requirements.txt`
 - **Read `docs/decisions.md`** before swapping any component — it documents why each was chosen.
-- **Secrets:** Never log or expose API keys. Cloud keys (Anthropic, Browser Use) are passed via env vars only.
+- **Secrets:** Never log or expose API keys. Cloud keys are passed via env vars only.
 - **Docker ports:** Ollama 11434, Open WebUI 3000, Qdrant 6333/6334, Beszel 8090.
 
 ## Documentation
