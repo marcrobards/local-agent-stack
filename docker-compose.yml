@@ -72,86 +72,37 @@ services:
     depends_on:
       - beszel
 
-  # ── Shopping Pipeline ────────────────────────────────
-  # Runs the Open WebUI Pipelines server on port 9099.
-  # Has access to Ollama and Qdrant via the Docker Compose network.
-  # Contains the full local-agent-stack repo baked in at build time
-  # with mem0ai, qdrant-client, ollama, requests, bs4 pre-installed.
-  #
-  # In Open WebUI:
-  #   Admin Panel → Settings → Connections → + (add connection)
-  #   URL:     http://shopping-pipeline:9099
-  #   API Key: 0p3n-w3bu!
-  #   Save — "Shopping Agent" will appear in the model dropdown.
+  # ── Shopping App ──────────────────────────────────
 
-  # shopping-pipeline:
-  #   build:
-  #     context: .          # repo root — Dockerfile is at ./Dockerfile.pipeline
-  #     dockerfile: Dockerfile.pipeline
-  #   container_name: shopping-pipeline
-  #   restart: unless-stopped
-  #   environment:
-  #     - PIPELINES_API_KEY=0p3n-w3bu!
-  #     - OLLAMA_BASE_URL=http://ollama:11434
-  #     - OLLAMA_LLM_MODEL=qwen2.5:7b
-  #     - OLLAMA_VISION_MODEL=qwen2.5vl:7b
-  #     - QDRANT_HOST=qdrant
-  #     - QDRANT_PORT=6333
-  #     - QDRANT_COLLECTION=agent_memory
-  #     - OLLAMA_EMBED_MODEL=nomic-embed-text:latest
-  #     - OLLAMA_EMBED_DIMS=768
-  #     - USER_ID=test_user
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-  #     - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
-  #     - LLM_PROVIDER=${LLM_PROVIDER}
-  #     - SEARCH_LLM=${SEARCH_LLM}
-  #   volumes:
-  #     - ./output:/app/local-agent-stack/output
-  #   depends_on:
-  #     - ollama
-  #     - qdrant
-  #   # No ports exposed to host — Open WebUI reaches it via the internal network.
-  #   # If you ever need to test from the host, uncomment the line below:
-  #   # ports:
-  #   #   - "9099:9099"
-
-  # ── Shopping Agent v2 ─────────────────────────────────
-  # Standalone FastAPI service with OpenAI-compatible API.
-  # Replaces the Pipelines-based shopping-pipeline above.
-  #
-  # In Open WebUI:
-  #   Admin Panel → Settings → Connections → + (add connection)
-  #   URL:     http://shopping-agent:8000/v1
-  #   API Key: (any value)
-  #   Save — "shopping-agent" will appear in the model dropdown.
-
-  shopping-agent:
+  shopping-frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.shopping-agent
-    container_name: shopping-agent
-    restart: unless-stopped
+      context: ./src/shopping-app/frontend
+    container_name: shopping-frontend
+    ports:
+      - "3001:3001"
     environment:
-      - LLM_PROVIDER=${LLM_PROVIDER:-claude}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
-      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
-      - SEARCH_LLM=${SEARCH_LLM:-anthropic}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-0}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_LLM_MODEL=qwen2.5:7b
-      - OLLAMA_VISION_MODEL=qwen2.5vl:7b
-      - USER_ID=${USER_ID:-user_1}
-      - DEBUG_OUTPUT_DIR=/app/debug
-      - STAGE_OUTPUT_DIR=/app/debug
-    volumes:
-      - ./debug:/app/debug
+      - API_URL=http://shopping-backend:8000
     depends_on:
+      - shopping-backend
+    restart: unless-stopped
+
+  shopping-backend:
+    build:
+      context: ./src/shopping-app/backend
+    container_name: shopping-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - shopping_data:/data
+    env_file:
+      - .env
+    environment:
+      - QDRANT_HOST=qdrant
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - qdrant
       - ollama
-    # No ports exposed to host — Open WebUI reaches it via the internal network.
-    # Uncomment to test from the host:
-    # ports:
-    #   - "8000:8000"
+    restart: unless-stopped
 
   # ── Tools (opt-in) ─────────────────────────────────
 
@@ -170,40 +121,6 @@ services:
       - qdrant
       - ollama
 
-  smoke-test-stage02a:
-    profiles: ["tools"]
-    image: python:3.12-slim
-    container_name: smoke-test-stage02a
-    working_dir: /app
-    command: >
-      sh -c "pip install ollama requests --quiet &&
-             python src/workflows/online-shopping/tests/smoke_test_02a.py"
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_VISION_MODEL=qwen2.5vl:7b
-    volumes:
-      - .:/app
-    depends_on:
-      - ollama
-
-  smoke-test-browser-use:
-    profiles: ["tools"]
-    build:
-      context: ./src/workflows/online-shopping
-      dockerfile: Dockerfile.browser-use
-    container_name: smoke-test-browser-use
-    init: true
-    ipc: host
-    entrypoint: ["/app/.venv/bin/python"]
-    command: ["/app/tests/smoke_test_browser_use.py"]
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-0}
-      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
-    volumes:
-      - ./src/workflows/online-shopping/tests:/app/tests:ro
-    # No dependency on ollama — uses Anthropic cloud API + Browser Use Cloud
-
 
 volumes:
   ollama_data:
@@ -215,6 +132,7 @@ volumes:
   qdrant_data:
     external: true
     name: agent-memory_qdrant_data
+  shopping_data:
   beszel_data:
   beszel_agent_data:
   beszel_socket:
