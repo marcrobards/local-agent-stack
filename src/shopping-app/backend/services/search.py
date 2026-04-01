@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 import re
 
 from anthropic import AsyncAnthropic
 from browser_use_sdk.v3 import AsyncBrowserUse
+
+logger = logging.getLogger(__name__)
 
 anthropic_client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 browser_client = AsyncBrowserUse()
@@ -28,8 +31,10 @@ Example: [{{"site_name": "Etsy", "search_url": "https://www.etsy.com/search?q=bl
     )
 
     sites_text = site_response.content[0].text
+    logger.info("Site selection response: %s", sites_text[:300])
     json_match = re.search(r"\[.*\]", sites_text, re.DOTALL)
     sites = json.loads(json_match.group(0)) if json_match else []
+    logger.info("Will search %d sites: %s", len(sites), [s.get("site_name") for s in sites])
 
     all_products = []
 
@@ -53,14 +58,17 @@ Return the results as a JSON array. Example:
 If you can't find matching products, return an empty array: []"""
 
         try:
+            logger.info("Searching %s: %s", site["site_name"], site["search_url"])
             result = await browser_client.run(task)
+            logger.info("Browser Use result for %s: %s", site["site_name"], str(result.output)[:300] if result.output else "None")
             if result.output:
                 output_match = re.search(r"\[.*\]", result.output, re.DOTALL)
                 if output_match:
                     products = json.loads(output_match.group(0))
+                    logger.info("Found %d products from %s", len(products), site["site_name"])
                     all_products.extend(products)
         except Exception as e:
-            print(f"Error searching {site['site_name']}: {e}")
+            logger.error("Error searching %s: %s", site["site_name"], e, exc_info=True)
             continue
 
     return all_products

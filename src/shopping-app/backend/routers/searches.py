@@ -1,7 +1,10 @@
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from db import get_db
 from models import (
@@ -59,6 +62,7 @@ async def list_searches():
 @router.post("")
 async def create_search():
     search_id = uuid.uuid4().hex
+    logger.info("Creating search %s", search_id)
     db = await get_db()
     try:
         await db.execute("INSERT INTO searches (id) VALUES (?)", (search_id,))
@@ -135,6 +139,7 @@ async def send_message(search_id: str, body: MessageCreate):
             raise HTTPException(status_code=404, detail="Search not found")
 
         # Save user message
+        logger.info("Search %s: user message: %s", search_id, body.content[:100])
         user_msg_id = uuid.uuid4().hex
         await db.execute(
             "INSERT INTO messages (id, search_id, role, content) VALUES (?, ?, ?, ?)",
@@ -191,6 +196,7 @@ async def send_message(search_id: str, body: MessageCreate):
 
 async def _run_search(search_id: str):
     """Background task that executes the product search."""
+    logger.info("Search %s: background search starting", search_id)
     db = await get_db()
     try:
         cursor = await db.execute(
@@ -207,14 +213,18 @@ async def _run_search(search_id: str):
         msg_rows = await msg_cursor.fetchall()
         messages = [{"role": r["role"], "content": r["content"]} for r in msg_rows]
 
+        logger.info("Search %s: executing with spec %s", search_id, json.dumps(spec)[:200])
         products = await execute_search(spec, messages)
+        logger.info("Search %s: got %d products", search_id, len(products))
 
         await db.execute(
             "UPDATE searches SET results = ?, status = 'complete', updated_at = datetime('now') WHERE id = ?",
             (json.dumps(products), search_id),
         )
         await db.commit()
+        logger.info("Search %s: complete", search_id)
     except Exception as e:
+        logger.error("Search %s: failed: %s", search_id, e, exc_info=True)
         await db.execute(
             "UPDATE searches SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?",
             (str(e), search_id),
