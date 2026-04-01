@@ -8,7 +8,6 @@ from models import (
     MessageCreate,
     MessageResponse,
     ProductCard,
-    SearchCreate,
     SearchDetail,
     SearchSummary,
     StatusResponse,
@@ -58,7 +57,7 @@ async def list_searches():
 
 
 @router.post("")
-async def create_search(body: SearchCreate):
+async def create_search():
     search_id = uuid.uuid4().hex
     db = await get_db()
     try:
