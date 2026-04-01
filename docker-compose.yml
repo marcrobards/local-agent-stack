@@ -72,6 +72,38 @@ services:
     depends_on:
       - beszel
 
+  # ── Shopping App ──────────────────────────────────
+
+  shopping-frontend:
+    build:
+      context: ./src/shopping-app/frontend
+    container_name: shopping-frontend
+    ports:
+      - "3001:3001"
+    environment:
+      - API_URL=http://shopping-backend:8000
+    depends_on:
+      - shopping-backend
+    restart: unless-stopped
+
+  shopping-backend:
+    build:
+      context: ./src/shopping-app/backend
+    container_name: shopping-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - shopping_data:/data
+    env_file:
+      - .env
+    environment:
+      - QDRANT_HOST=qdrant
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - qdrant
+      - ollama
+    restart: unless-stopped
+
   # ── Tools (opt-in) ─────────────────────────────────
 
   memory-chat:
@@ -100,6 +132,7 @@ volumes:
   qdrant_data:
     external: true
     name: agent-memory_qdrant_data
+  shopping_data:
   beszel_data:
   beszel_agent_data:
   beszel_socket:
